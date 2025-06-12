@@ -1,0 +1,15 @@
+[CutPosition]
+up = (440,6)
+bottom=(82,58310)
+left=()
+right = (17872,1881)
+unit = (739,1947)
+
+[Layout]
+rows = 22
+cols = 6
+
+[Size]
+W=100
+H=200
+

@@ -1,0 +1,46 @@
+E:\YJC\Segment\Projects\ImageSegmentation\ImageSegmentation\bin\Debug\net8.0\ImageSegmentation.exe
+E:\YJC\Segment\Projects\ImageSegmentation\ImageSegmentation\bin\Debug\net8.0\ImageSegmentation.deps.json
+E:\YJC\Segment\Projects\ImageSegmentation\ImageSegmentation\bin\Debug\net8.0\ImageSegmentation.runtimeconfig.json
+E:\YJC\Segment\Projects\ImageSegmentation\ImageSegmentation\bin\Debug\net8.0\ImageSegmentation.dll
+E:\YJC\Segment\Projects\ImageSegmentation\ImageSegmentation\bin\Debug\net8.0\ImageSegmentation.pdb
+E:\YJC\Segment\Projects\ImageSegmentation\ImageSegmentation\bin\Debug\net8.0\Newtonsoft.Json.dll
+E:\YJC\Segment\Projects\ImageSegmentation\ImageSegmentation\bin\Debug\net8.0\OpenCvSharp.dll
+E:\YJC\Segment\Projects\ImageSegmentation\ImageSegmentation\obj\Debug\net8.0\ImageSegmentation.csproj.AssemblyReference.cache
+E:\YJC\Segment\Projects\ImageSegmentation\ImageSegmentation\obj\Debug\net8.0\ImageSegmentation.GeneratedMSBuildEditorConfig.editorconfig
+E:\YJC\Segment\Projects\ImageSegmentation\ImageSegmentation\obj\Debug\net8.0\ImageSegmentation.AssemblyInfoInputs.cache
+E:\YJC\Segment\Projects\ImageSegmentation\ImageSegmentation\obj\Debug\net8.0\ImageSegmentation.AssemblyInfo.cs
+E:\YJC\Segment\Projects\ImageSegmentation\ImageSegmentation\obj\Debug\net8.0\ImageSegmentation.csproj.CoreCompileInputs.cache
+E:\YJC\Segment\Projects\ImageSegmentation\ImageSegmentation\obj\Debug\net8.0\ImageSeg.ED865610.Up2Date
+E:\YJC\Segment\Projects\ImageSegmentation\ImageSegmentation\obj\Debug\net8.0\ImageSegmentation.dll
+E:\YJC\Segment\Projects\ImageSegmentation\ImageSegmentation\obj\Debug\net8.0\refint\ImageSegmentation.dll
+E:\YJC\Segment\Projects\ImageSegmentation\ImageSegmentation\obj\Debug\net8.0\ImageSegmentation.pdb
+E:\YJC\Segment\Projects\ImageSegmentation\ImageSegmentation\obj\Debug\net8.0\ImageSegmentation.genruntimeconfig.cache
+E:\YJC\Segment\Projects\ImageSegmentation\ImageSegmentation\obj\Debug\net8.0\ref\ImageSegmentation.dll
+E:\YJC\Segment\Projects\ImageSegmentation\ImageSegmentation\bin\Debug\net8.0\OpenCvSharpExtern.dll
+E:\YJC\Segment\Projects\ImageSegmentation\ImageSegmentation\bin\Debug\net8.0\runtimes\win-x64\native\OpenCvSharpExtern.dll
+E:\YJC\Segment\Projects\ImageSegmentation\ImageSegmentation\bin\Debug\net8.0\runtimes\win-x64\native\opencv_videoio_ffmpeg4110_64.dll
+E:\YJC\Segment\Projects\ImageSegmentation\ImageSegmentation\bin\Debug\net8.0\runtimes\win-x86\native\OpenCvSharpExtern.dll
+E:\YJC\Segment\Projects\ImageSegmentation\ImageSegmentation\bin\Debug\net8.0\runtimes\win-x86\native\opencv_videoio_ffmpeg4110.dll
+E:\YJC\Segment\Projects\ImageSegmentation - 副本\ImageSegmentation\obj\Debug\net8.0\ImageSegmentation.csproj.AssemblyReference.cache
+E:\YJC\Segment\Projects\ImageSegmentation - 副本\ImageSegmentation\obj\Debug\net8.0\ImageSegmentation.GeneratedMSBuildEditorConfig.editorconfig
+E:\YJC\Segment\Projects\ImageSegmentation - 副本\ImageSegmentation\obj\Debug\net8.0\ImageSegmentation.AssemblyInfoInputs.cache
+E:\YJC\Segment\Projects\ImageSegmentation - 副本\ImageSegmentation\obj\Debug\net8.0\ImageSegmentation.AssemblyInfo.cs
+E:\YJC\Segment\Projects\ImageSegmentation - 副本\ImageSegmentation\obj\Debug\net8.0\ImageSegmentation.csproj.CoreCompileInputs.cache
+E:\YJC\Segment\Projects\ImageSegmentation - 副本\ImageSegmentation\obj\Debug\net8.0\ImageSegmentation.dll
+E:\YJC\Segment\Projects\ImageSegmentation - 副本\ImageSegmentation\obj\Debug\net8.0\refint\ImageSegmentation.dll
+E:\YJC\Segment\Projects\ImageSegmentation - 副本\ImageSegmentation\obj\Debug\net8.0\ImageSegmentation.pdb
+E:\YJC\Segment\Projects\ImageSegmentation - 副本\ImageSegmentation\bin\Debug\net8.0\ImageSegmentation.exe
+E:\YJC\Segment\Projects\ImageSegmentation - 副本\ImageSegmentation\bin\Debug\net8.0\ImageSegmentation.deps.json
+E:\YJC\Segment\Projects\ImageSegmentation - 副本\ImageSegmentation\bin\Debug\net8.0\ImageSegmentation.runtimeconfig.json
+E:\YJC\Segment\Projects\ImageSegmentation - 副本\ImageSegmentation\bin\Debug\net8.0\ImageSegmentation.dll
+E:\YJC\Segment\Projects\ImageSegmentation - 副本\ImageSegmentation\bin\Debug\net8.0\ImageSegmentation.pdb
+E:\YJC\Segment\Projects\ImageSegmentation - 副本\ImageSegmentation\bin\Debug\net8.0\Newtonsoft.Json.dll
+E:\YJC\Segment\Projects\ImageSegmentation - 副本\ImageSegmentation\bin\Debug\net8.0\OpenCvSharp.dll
+E:\YJC\Segment\Projects\ImageSegmentation - 副本\ImageSegmentation\bin\Debug\net8.0\OpenCvSharpExtern.dll
+E:\YJC\Segment\Projects\ImageSegmentation - 副本\ImageSegmentation\bin\Debug\net8.0\runtimes\win-x64\native\OpenCvSharpExtern.dll
+E:\YJC\Segment\Projects\ImageSegmentation - 副本\ImageSegmentation\bin\Debug\net8.0\runtimes\win-x64\native\opencv_videoio_ffmpeg4110_64.dll
+E:\YJC\Segment\Projects\ImageSegmentation - 副本\ImageSegmentation\bin\Debug\net8.0\runtimes\win-x86\native\OpenCvSharpExtern.dll
+E:\YJC\Segment\Projects\ImageSegmentation - 副本\ImageSegmentation\bin\Debug\net8.0\runtimes\win-x86\native\opencv_videoio_ffmpeg4110.dll
+E:\YJC\Segment\Projects\ImageSegmentation - 副本\ImageSegmentation\obj\Debug\net8.0\ImageSeg.ED865610.Up2Date
+E:\YJC\Segment\Projects\ImageSegmentation - 副本\ImageSegmentation\obj\Debug\net8.0\ImageSegmentation.genruntimeconfig.cache
+E:\YJC\Segment\Projects\ImageSegmentation - 副本\ImageSegmentation\obj\Debug\net8.0\ref\ImageSegmentation.dll
