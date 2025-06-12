@@ -36,8 +36,7 @@ namespace ImageSegmentation
                 LabelBinaryMasks = new List<LabelImages>(),
                 LabelColorMasks = new List<LabelImages>(),
                 LabelGrayMasks = new List<LabelImages>(),
-                LabelNoInspMasks = new List<LabelImages>(),
-                LabelBndBoxRegion = new List<LabelBndBox>()
+                LabelNoInspMasks = new List<LabelImages>()
             };
         }
 

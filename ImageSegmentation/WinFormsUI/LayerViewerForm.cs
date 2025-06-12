@@ -16,7 +16,6 @@ namespace ImageSegmentation.WinFormsUI
     public partial class LayerViewerForm : Form
     {
         //private readonly string _layerDirectory = "E:\\ImgSegment\\BoardSide\\HDSR01 783HDS\\Test";
-        private readonly string boardJsonDirectory = "E:\\ImgSegment\\BoardSide\\FCBOC";
         private List<FlagInfo> _flagInfos = new List<FlagInfo>();
         private Size _fullBoardSize = Size.Empty;
         private Size _unitLayoutSize = Size.Empty;
@@ -26,6 +25,7 @@ namespace ImageSegmentation.WinFormsUI
 
         // Fields for Zoom and Pan
         private float _zoomFactor = 1.0f;
+        private PointF _viewOffset = PointF.Empty; // Represents the top-left of the view in world coordinates
         private bool _isPanning = false;
         private Point _panStartPoint = Point.Empty;
 
@@ -175,8 +175,8 @@ namespace ImageSegmentation.WinFormsUI
             _startButton.Click += StartButton_Click;
 
             // PictureBox
-            _pictureBox.SizeMode = PictureBoxSizeMode.Normal; // Use Normal mode for custom drawing
             _pictureBox.BackColor = Color.Black; // Set a background color
+            _pictureBox.Dock = DockStyle.Fill;
 
             // Add Event Handlers for Zoom and Pan
             _pictureBox.Paint += PictureBox_Paint;
@@ -184,6 +184,10 @@ namespace ImageSegmentation.WinFormsUI
             _pictureBox.MouseDown += PictureBox_MouseDown;
             _pictureBox.MouseMove += PictureBox_MouseMove;
             _pictureBox.MouseUp += PictureBox_MouseUp;
+            _pictureBox.MouseDoubleClick += PictureBox_MouseDoubleClick;
+
+            // Disable AutoScroll on the container panel
+            rightPanel.AutoScroll = false;
         }
         #endregion
         
@@ -202,20 +206,24 @@ namespace ImageSegmentation.WinFormsUI
         
         private void FitImageToPanel()
         {
-            if (_boardSize.IsEmpty) return;
+            if (_boardSize.IsEmpty || _pictureBox.ClientSize.Width == 0 || _pictureBox.ClientSize.Height == 0) return;
 
-            float panelAspect = (float)rightPanel.ClientSize.Width / rightPanel.ClientSize.Height;
+            float panelAspect = (float)_pictureBox.ClientSize.Width / _pictureBox.ClientSize.Height;
             float imageAspect = (float)_boardSize.Width / _boardSize.Height;
 
             if (panelAspect > imageAspect)
             {
-                _zoomFactor = (float)rightPanel.ClientSize.Height / _boardSize.Height;
+                _zoomFactor = (float)_pictureBox.ClientSize.Height / _boardSize.Height;
             }
             else
             {
-                _zoomFactor = (float)rightPanel.ClientSize.Width / _boardSize.Width;
+                _zoomFactor = (float)_pictureBox.ClientSize.Width / _boardSize.Width;
             }
-            UpdatePictureBoxSizeAndPosition();
+
+            // Center the image
+            _viewOffset.X = (_boardSize.Width / 2f) - (_pictureBox.ClientSize.Width / 2f) / _zoomFactor;
+            _viewOffset.Y = (_boardSize.Height / 2f) - (_pictureBox.ClientSize.Height / 2f) / _zoomFactor;
+
             _pictureBox.Invalidate(); // Trigger a repaint
         }
 
@@ -283,6 +291,11 @@ namespace ImageSegmentation.WinFormsUI
                 selectedPath = dialog.SelectedPath;
             }
 
+            LoadLayersFromPath(selectedPath);
+        }
+
+        private void LoadLayersFromPath(string selectedPath)
+        {
             _layerTreeView.Nodes.Clear();
             _flagInfos.Clear();
             _fullBoardSize = Size.Empty;
@@ -311,7 +324,7 @@ namespace ImageSegmentation.WinFormsUI
                 MessageBox.Show("全局 metadata.json 未找到，无法确定电路板尺寸。", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
-
+            
             _layerTreeView.BeginUpdate();
             var flagSubDirs = Directory.GetDirectories(selectedPath);
             foreach (var flagDir in flagSubDirs)
@@ -321,12 +334,11 @@ namespace ImageSegmentation.WinFormsUI
                 {
                     var flagNode = new TreeNode(flagName) { Tag = flagEnum };
                     _layerTreeView.Nodes.Add(flagNode);
-
-                    var layerFiles = Directory.GetFiles(flagDir, "*.json");
+                    
+                    var layerFiles = Directory.GetFiles(flagDir, "*.json", SearchOption.TopDirectoryOnly);
                     foreach (var layerFile in layerFiles)
                     {
                         var layerName = Path.GetFileNameWithoutExtension(layerFile);
-                        // Read contour data
                         var json = File.ReadAllText(layerFile);
                         var contours = JsonConvert.DeserializeObject<List<Point[]>>(json, new PointConverter());
                         var layerInfo = new LayerInfo
@@ -378,7 +390,6 @@ namespace ImageSegmentation.WinFormsUI
         private void UpdateCompositeImage()
         {
             // Determine board size and offset based on the current view mode
-            Point currentOffset;
             if (_currentViewMode == BoardInfo.UNIT.ToString())
             {
                 _boardSize = _unitLayoutSize;
@@ -388,7 +399,14 @@ namespace ImageSegmentation.WinFormsUI
                 _boardSize = _fullBoardSize;
             }
 
-            FitImageToPanel();
+            // Set initial view for the selected board layout to 100% zoom, centered.
+            _zoomFactor = 1.0f;
+            if (!_boardSize.IsEmpty && _pictureBox.ClientSize.Width > 0 && _pictureBox.ClientSize.Height > 0)
+            {
+                _viewOffset.X = (_boardSize.Width / 2f) - (_pictureBox.ClientSize.Width / 2f);
+                _viewOffset.Y = (_boardSize.Height / 2f) - (_pictureBox.ClientSize.Height / 2f);
+            }
+            _pictureBox.Invalidate();
         }
 
         private void PictureBox_Paint(object? sender, PaintEventArgs e)
@@ -397,11 +415,18 @@ namespace ImageSegmentation.WinFormsUI
 
             var g = e.Graphics;
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
 
-            // Apply transformations: First scale, then translate.
-            // The translation is based on the panel's scroll position.
+            // Apply transformations for pan and zoom
             g.ScaleTransform(_zoomFactor, _zoomFactor);
-            g.TranslateTransform(rightPanel.AutoScrollPosition.X / _zoomFactor, rightPanel.AutoScrollPosition.Y / _zoomFactor);
+            g.TranslateTransform(-_viewOffset.X, -_viewOffset.Y);
+
+            // Draw a border to indicate the bounds of the board layout
+            using (var borderPen = new Pen(Color.DarkGray, 1f / _zoomFactor))
+            {
+                borderPen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
+                g.DrawRectangle(borderPen, 0, 0, _boardSize.Width, _boardSize.Height);
+            }
 
             // Culling: Calculate the visible rectangle in world coordinates
             RectangleF visibleWorldRect = GetVisibleWorldRect();
@@ -450,10 +475,14 @@ namespace ImageSegmentation.WinFormsUI
 
         private RectangleF GetVisibleWorldRect()
         {
-            float worldX = -rightPanel.AutoScrollPosition.X / _zoomFactor;
-            float worldY = -rightPanel.AutoScrollPosition.Y / _zoomFactor;
-            float worldWidth = rightPanel.ClientSize.Width / _zoomFactor;
-            float worldHeight = rightPanel.ClientSize.Height / _zoomFactor;
+            if (_pictureBox.ClientSize.Width == 0 || _pictureBox.ClientSize.Height == 0)
+            {
+                return RectangleF.Empty;
+            }
+            float worldX = _viewOffset.X;
+            float worldY = _viewOffset.Y;
+            float worldWidth = _pictureBox.ClientSize.Width / _zoomFactor;
+            float worldHeight = _pictureBox.ClientSize.Height / _zoomFactor;
             return new RectangleF(worldX, worldY, worldWidth, worldHeight);
         }
 
@@ -481,25 +510,32 @@ namespace ImageSegmentation.WinFormsUI
 
         private void StartButton_Click(object sender, EventArgs e)
         {
+            string boardPath;
+            using (var dialog = new FolderBrowserDialog())
+            {
+                dialog.Description = "请选择要处理的电路板数据文件夹";
+                if (dialog.ShowDialog() != DialogResult.OK)
+                {
+                    return;
+                }
+                boardPath = dialog.SelectedPath;
+            }
+
             try
             {
                 this.Cursor = Cursors.WaitCursor;
                 _startButton.Enabled = false;
                 _startButton.Text = "Processing...";
 
-                // 使用在UnitToBoardLayoutEngine中定义的路径作为临时占位符
-                //string boardJsonDirectory = "E:\\ImgSegment\\BoardSide\\HDSR01 783HDS"; 
-                //string  = "E:\\ImgSegment\\Unit\\Unit.png";
-
-                var unitImgPath = Path.Combine(boardJsonDirectory, "Unit.png");
+                var unitImgPath = Path.Combine(boardPath, "Unit.png");
 
                 var layoutEngine = new UnitToBoardLayoutEngine();
-                layoutEngine.Layout(boardJsonDirectory, unitImgPath);
+                layoutEngine.Layout(boardPath, unitImgPath);
 
                 MessageBox.Show("Layout processing completed!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 
                 // 自动重新加载图层
-                LoadLayers_Click(this, EventArgs.Empty);
+                //LoadLayersFromPath(boardPath);
             }
             catch (Exception ex)
             {
@@ -516,37 +552,26 @@ namespace ImageSegmentation.WinFormsUI
         private void PictureBox_MouseWheel(object? sender, MouseEventArgs e)
         {
             if (_boardSize.IsEmpty) return;
-            // Mark the event as handled to prevent the container from scrolling
             if (e is HandledMouseEventArgs h) h.Handled = true;
 
-            // Calculate the new zoom factor
+            PointF mousePos = e.Location;
+
+            // Calculate world coordinates under the mouse cursor before zooming
+            float worldX = _viewOffset.X + mousePos.X / _zoomFactor;
+            float worldY = _viewOffset.Y + mousePos.Y / _zoomFactor;
+
+            // Calculate new zoom factor
             float scale = e.Delta > 0 ? 1.25f : 0.8f;
             var newZoomFactor = _zoomFactor * scale;
-            newZoomFactor = Math.Max(0.1f, Math.Min(newZoomFactor, 20.0f)); // Clamp zoom level
+            newZoomFactor = Math.Max(0.05f, Math.Min(newZoomFactor, 50.0f)); // Clamp zoom level
 
             if (Math.Abs(newZoomFactor - _zoomFactor) < 0.001) return;
 
-            // Point-based zooming
-            PointF mousePos = e.Location;
-
-            // Calculate scroll positions before zoom
-            float scrollX_before = rightPanel.HorizontalScroll.Value;
-            float scrollY_before = rightPanel.VerticalScroll.Value;
-
-            // Calculate world coordinates of the point under the mouse
-            float worldX = (mousePos.X + scrollX_before) / _zoomFactor;
-            float worldY = (mousePos.Y + scrollY_before) / _zoomFactor;
-
-            // Update zoom factor and PictureBox size
             _zoomFactor = newZoomFactor;
-            UpdatePictureBoxSizeAndPosition();
 
-            // Calculate new scroll positions to keep the point under the mouse
-            int scrollX_after = (int)(worldX * _zoomFactor - mousePos.X);
-            int scrollY_after = (int)(worldY * _zoomFactor - mousePos.Y);
-
-            // Apply new scroll positions
-            rightPanel.AutoScrollPosition = new Point(scrollX_after, scrollY_after);
+            // Adjust view offset to keep the point under the mouse stationary
+            _viewOffset.X = worldX - mousePos.X / _zoomFactor;
+            _viewOffset.Y = worldY - mousePos.Y / _zoomFactor;
 
             _pictureBox.Invalidate();
         }
@@ -565,12 +590,18 @@ namespace ImageSegmentation.WinFormsUI
         {
             if (_isPanning)
             {
-                // Calculate the new scroll position
+                // Calculate the change in mouse position
                 int dx = e.X - _panStartPoint.X;
                 int dy = e.Y - _panStartPoint.Y;
-                int newX = Math.Max(0, -rightPanel.AutoScrollPosition.X - dx);
-                int newY = Math.Max(0, -rightPanel.AutoScrollPosition.Y - dy);
-                rightPanel.AutoScrollPosition = new Point(newX, newY);
+
+                // Update the view offset based on the mouse movement
+                _viewOffset.X -= dx / _zoomFactor;
+                _viewOffset.Y -= dy / _zoomFactor;
+
+                // Update the starting point for the next mouse move event
+                _panStartPoint = e.Location;
+
+                _pictureBox.Invalidate();
             }
         }
 
@@ -581,6 +612,11 @@ namespace ImageSegmentation.WinFormsUI
                 _isPanning = false;
                 _pictureBox.Cursor = Cursors.Default;
             }
+        }
+
+        private void PictureBox_MouseDoubleClick(object? sender, MouseEventArgs e)
+        {
+            FitImageToPanel();
         }
 
         private class FlagInfo

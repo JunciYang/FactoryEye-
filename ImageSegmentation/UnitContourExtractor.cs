@@ -69,27 +69,6 @@ namespace ImageSegmentation
                     LabelName = shape.Label,
                     Images = shapeMask
                 });
-
-                // 保存每个label对应的区域
-                if (shape.Label != LabelTypes.NOINSP.ToString())
-                {
-                    var points = shape.Points.Select(p => new Point((int)p[0], (int)p[1]));
-                    Rect boundingBox = Cv2.BoundingRect(points);
-                    var labelBndBox = new BndBox
-                    {
-                        X = boundingBox.X,
-                        Y = boundingBox.Y,
-                        Width = boundingBox.Width,
-                        Height = boundingBox.Height
-                    };
-
-                    singleJson.LabelBndBoxRegion.Add(new LabelBndBox
-                    {
-                        Label = shape.Label,
-                        BndBox = labelBndBox,
-                    });
-                }
-
                 SplitNestedMaskBasedGroupID(groupedShapes, shape, shapeMask);
             }
             SubtractNestedMasksByArea(groupedShapes);
@@ -150,22 +129,24 @@ namespace ImageSegmentation
             foreach (var group in groupedList)
             {
                 string label = group.LabelName;
-
-                // 如果是不检区
-                if (label.ToUpper() == LabelTypes.NOINSP.ToString())
-                {
-                    continue;
-                }
-                
                 Mat labelMeShapesMask = new Mat(noInspImg.Size(), MatType.CV_8UC1, Scalar.Black);
                 foreach (var maskImage in group.Images)
                 {
                     Cv2.BitwiseOr(labelMeShapesMask, maskImage, labelMeShapesMask);
                 }
-                //Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\{label}mergedSameLabelMasks.bmp", labelMeShapesMask);
+                Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\{label}mergedsameLabelMasks.bmp", labelMeShapesMask);
 
                 var grayROI = new Mat();
-                noInspImg.CopyTo(grayROI, labelMeShapesMask);
+
+                // 如果是不检区 或 卡槽
+                if (label.ToUpper() == LabelTypes.NOINSP.ToString() || label.ToUpper() == LabelTypes.SLOTCUTOUT.ToString())
+                {
+                    grayROI = labelMeShapesMask;                    
+                }
+                else
+                {
+                    noInspImg.CopyTo(grayROI, labelMeShapesMask);
+                }
                 Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\{label}_grayROI.bmp", grayROI);
 
                 (contours, binaryMask) = ImgProcess.ThresholdMaskAndFindContours(grayROI, threshold, ThresholdTypes.Binary);
@@ -188,6 +169,7 @@ namespace ImageSegmentation
                     LabelName = label,
                     Images = colorROI
                 });
+                Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\{label}_color.bmp", colorROI);
 
                 // 存轮廓
                 singleJson.SinglelabelContours.Add(new ContourLabel

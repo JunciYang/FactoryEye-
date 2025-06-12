@@ -19,7 +19,8 @@ namespace ImageSegmentation
         COMPFID, // 颗内定位点
         PAD,
         FINGER,
-        SLOTSHIFT,
+        SLOTMARK, // 卡槽标记
+        SLOTCUTOUT,// 镂空卡槽
         NOINSP
     }
 
@@ -158,7 +159,6 @@ namespace ImageSegmentation
             public List<LabelImages> LabelNoInspMasks { get; set; }
             public List<ContourLabel> SinglelabelContours {  get; set; }
             public List<ContourLabel> OriginalSizeContours {  get; set; }
-            public List<LabelBndBox> LabelBndBoxRegion { get; set; }
             public Mat SolderImage { get; set; }
         }
 

@@ -66,12 +66,12 @@ namespace ImageSegmentation
 
             // Step 2: Aggregate results from all regions.
             AggregateRegionResults(regionResults, result, data);
-            var OriginalSizeContoursOfUnit = result.OriginalSizeContours.FirstOrDefault(l => string.Equals(l.JsonName, BoardInfo.UNIT.ToString(), StringComparison.OrdinalIgnoreCase));
 
             RestoreToFullBoardCoordinates(result, data);
 
             // Step 3: Generate the full board layout from aggregated contours.
-            var layoutResult = GenerateFullBoardLayout(result.FullBoardContours, data);
+            var layoutResult = EdgeFidAsOriginalToCalcAllContours(result.FullBoardContours, data);
+
             result.FullBoardContoursBasedEdgeFid = layoutResult.FullBoardContoursBasedEdgeFid;
             result.LayoutCoordinate = layoutResult.LayoutCoordinate;
             result.PixelCoordinate = layoutResult.PixelCoordinate;
@@ -324,9 +324,6 @@ namespace ImageSegmentation
                     result.FlagsSolderImage.Add(regionResult.SolderImage);
                 }
                 result.OriginalSizeContours.Add(regionResult.Contours);
-                result.FlagsLabelBndBox.Add(regionResult.BndBoxRegion);
-
-                //result.FullBoardContours.Add(regionResult.Contours);
             }
         }
 
@@ -432,11 +429,10 @@ namespace ImageSegmentation
         }
 
 
-        public LabelProcessingResult GenerateFullBoardLayout(List<BoardContour> allRegionContours, DataInfo.Root data)
+        public LabelProcessingResult EdgeFidAsOriginalToCalcAllContours(List<BoardContour> allRegionContours, DataInfo.Root data)
         {
             var result = new LabelProcessingResult();
 
-            // Step 1: Calculate origin based on EdgeFid
             var mom = CalcMomentOfEdgeFid(allRegionContours, data);
             var OriginalOffsetContours = new List<BoardContour>();
             if (mom == new Point(0, 0))
@@ -445,19 +441,16 @@ namespace ImageSegmentation
             }
             else
             {
-                OriginalOffsetContours = EdgeFidAsOriginalToCalcAllContours(allRegionContours, mom, data);
+                OriginalOffsetContours = CalcOfMomentAsOffset(allRegionContours, mom, data);//EdgeFidAsOriginalToCalcAllContours
             }
+            var finalMergedContourLabels = MergedContoursByFlagsName(OriginalOffsetContours);
 
-            // Step 2: Calculate contours offset by the EdgeFid origin
-            //var edgeAndUnitOffsetContours = CalcEdgeAndUnitOffsetContours(allRegionContours, nonNegativeOffsetPoint, data);
-
-            // Step 3: Map the unit contours to the full board layout
-            result = UnitMappingToFullBoard(OriginalOffsetContours, data, result);
+            result = UnitMappingToFullBoard(finalMergedContourLabels, data, result);
 
             return result;
         }
 
-        private Point CalcMomentOfEdgeFid(List<BoardContour> regionContours, DataInfo.Root data, bool isMomentAsOrigin = false)
+        private Point CalcMomentOfEdgeFid(List<BoardContour> regionContours, DataInfo.Root data)
         {
             var edgeFidRegion = regionContours.FirstOrDefault(rc =>
                         rc.ContourGroups.Any(cl => string.Equals(cl.LabelName, LabelTypes.EDGEFID.ToString(), StringComparison.OrdinalIgnoreCase)));
@@ -478,19 +471,19 @@ namespace ImageSegmentation
             {
                 Console.WriteLine("Warning: No EDGEFID found in Tiled layout to calculate global origin. Using (0,0).");
             }
-            var edgeAndUnitOffsetContours = EdgeFidAsOriginalToCalcAllContours(regionContours, mom, data);
+            //var edgeAndUnitOffsetContours = CalcOfMomentAsOffset(regionContours, mom, data);
 
             return mom;
         }
 
-        private List<BoardContour> EdgeFidAsOriginalToCalcAllContours(List<BoardContour> regionContours, Point offsetPoint, DataInfo.Root data)
+        private List<BoardContour> CalcOfMomentAsOffset(List<BoardContour> regionContours, Point offsetPoint, DataInfo.Root data)
         {
             var mask = new Mat(new Size(data.FullBoardLayout.Width, data.FullBoardLayout.Height), MatType.CV_8UC1, Scalar.All(0));
             var maskNew = new Mat();
 
-            var finalMergedContourLabels = MergedContoursByFlagsName(regionContours);
+            //var finalMergedContourLabels = MergedContoursByFlagsName(regionContours);
             var relativeEdgeFidContours = new List<BoardContour>();
-            foreach (var mergedContourLabels in finalMergedContourLabels)
+            foreach (var mergedContourLabels in regionContours)
             {
                 var contourLabel = mergedContourLabels.ContourGroups;
 
@@ -505,6 +498,8 @@ namespace ImageSegmentation
                 });
             }
             Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\mask_globally_merged11111.png", maskNew);
+
+
             return relativeEdgeFidContours;
         }
 
