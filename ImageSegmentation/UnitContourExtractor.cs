@@ -126,6 +126,8 @@ namespace ImageSegmentation
             //Mat mergedAllMasks = new Mat(noInspImg.Size(), MatType.CV_8UC1, Scalar.Black);
             var allMaskROI = new Mat();
             var singlelabelContours = new ContourLabel();
+            var allLabelMeMask = new Mat(noInspImg.Size(), MatType.CV_8UC1, Scalar.Black);
+
             foreach (var group in groupedList)
             {
                 string label = group.LabelName;
@@ -133,7 +135,10 @@ namespace ImageSegmentation
                 foreach (var maskImage in group.Images)
                 {
                     Cv2.BitwiseOr(labelMeShapesMask, maskImage, labelMeShapesMask);
+                    Cv2.BitwiseOr(allLabelMeMask, maskImage, allLabelMeMask);
+
                 }
+
                 Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\{label}mergedsameLabelMasks.bmp", labelMeShapesMask);
 
                 var grayROI = new Mat();
@@ -178,6 +183,19 @@ namespace ImageSegmentation
                     Contours = contours,
                 });
             }
+            Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\allLabelMeMask00000.bmp", allLabelMeMask);
+
+            var img = new Mat(noInspImg.Size(), MatType.CV_8UC1, Scalar.Black);
+            foreach (var cnt in singleJson.SinglelabelContours)
+            {
+                for (int j = 0; j < cnt.Contours.Length; j++)
+                {
+                    Cv2.DrawContours(img, cnt.Contours, j, Scalar.All(255), -1);
+                }
+            }
+            Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\img00000.bmp", img);
+
+
 
             return singleJson;
         }

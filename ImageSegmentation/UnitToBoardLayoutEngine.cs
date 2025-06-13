@@ -51,7 +51,7 @@ namespace ImageSegmentation
                 OriginalSizeContours = new List<BoardContour>(),
                 FullBoardContoursBasedEdgeFid = new List<BoardContour>(),
                 LayoutCoordinate = new List<Coordinate>(),
-                PixelCoordinate = new List<Coordinate>(),
+                PixelCoordinateBaseEdgeFid = new List<Coordinate>(),
                 FlagsBinaryMasks = new List<FlagsBinaryMask>(),
                 FlagsColorMasks = new List<FlagsBinaryMask>(),
                 FlagsGrayMasks = new List<FlagsBinaryMask>(),
@@ -74,12 +74,12 @@ namespace ImageSegmentation
 
             result.FullBoardContoursBasedEdgeFid = layoutResult.FullBoardContoursBasedEdgeFid;
             result.LayoutCoordinate = layoutResult.LayoutCoordinate;
-            result.PixelCoordinate = layoutResult.PixelCoordinate;
+            result.PixelCoordinateBaseEdgeFid = layoutResult.PixelCoordinateBaseEdgeFid;
             //result.FullBoardContours = layoutResult.FullBoardContours;
 
             // Step 4: Save all generated artifacts.
             SaveContourData(result, data, savePath);
-
+            SaveLayoutArtifacts(result, data);
 
             return new Mat(); 
         }
@@ -142,8 +142,8 @@ namespace ImageSegmentation
             // Save global metadata with both layout sizes
             var globalMetadata = new
             {
-                FullBoardLayout = new { data.FullBoardLayout.Width, data.FullBoardLayout.Height },
-                UnitLayout = new { data.UnitLayout.Width, data.UnitLayout.Height },
+                FullBoardLayout = new { data.FullBoardLayout.Rows, data.FullBoardLayout.Cols, data.FullBoardLayout.Width, data.FullBoardLayout.Height },
+                UnitLayout = new { data.UnitLayout.Rows, data.UnitLayout.Cols, data.UnitLayout.Width, data.UnitLayout.Height },
                 OriginOffsetX = SystemMgr.EdgeFidCutPosition.X,
                 OriginOffsetY = SystemMgr.EdgeFidCutPosition.Y
             };
@@ -250,48 +250,48 @@ namespace ImageSegmentation
         {
             var path = "E:\\ImgSegment\\Test\\BOC_mask";
 
-            foreach (var bMask in result.FlagsBinaryMasks)
-            {
-                foreach (var m in bMask.LabelImages)
-                {
-                    Cv2.ImWrite(@$"{path}\\{bMask.FlagsName}_{m.LabelName}_binary.png", m.Images);
-                }
-            }
+            //foreach (var bMask in result.FlagsBinaryMasks)
+            //{
+            //    foreach (var m in bMask.LabelImages)
+            //    {
+            //        Cv2.ImWrite(@$"{path}\\{bMask.FlagsName}_{m.LabelName}_binary.png", m.Images);
+            //    }
+            //}
 
-            foreach (var cMask in result.FlagsColorMasks)
-            {
-                foreach (var m in cMask.LabelImages)
-                {
-                    Cv2.ImWrite(@$"{path}\\{cMask.FlagsName}_{m.LabelName}_color.png", m.Images);
-                }
-            }
+            //foreach (var cMask in result.FlagsColorMasks)
+            //{
+            //    foreach (var m in cMask.LabelImages)
+            //    {
+            //        Cv2.ImWrite(@$"{path}\\{cMask.FlagsName}_{m.LabelName}_color.png", m.Images);
+            //    }
+            //}
 
-            foreach (var nMask in result.FlagsNoInspRegion)
-            {
-                foreach (var m in nMask.LabelImages)
-                {
-                    Cv2.ImWrite(@$"{path} \\{nMask.FlagsName}_{m.LabelName}_NoInsp.png", m.Images);
-                }
-            }
+            //foreach (var nMask in result.FlagsNoInspRegion)
+            //{
+            //    foreach (var m in nMask.LabelImages)
+            //    {
+            //        Cv2.ImWrite(@$"{path} \\{nMask.FlagsName}_{m.LabelName}_NoInsp.png", m.Images);
+            //    }
+            //}
 
             foreach (var sMask in result.FlagsSolderImage)
             {
                 Cv2.ImWrite(@$"{path}\\{sMask.LabelName}_{sMask.LabelName}_Solder.png", sMask.Images);
             }
            
-            var jsonLayoutCoordinate = JsonConvert.SerializeObject(result.LayoutCoordinate);
-            var jsonPixelCoordinate = JsonConvert.SerializeObject(result.PixelCoordinate);
-            File.WriteAllText(@$"{path}\\LayoutCoordinate.json", jsonLayoutCoordinate);
-            File.WriteAllText(@$"{path}\\PixelCoordinate.json", jsonPixelCoordinate);
+            //var jsonLayoutCoordinate = JsonConvert.SerializeObject(result.LayoutCoordinate);
+            //var jsonPixelCoordinate = JsonConvert.SerializeObject(result.PixelCoordinate);
+            //File.WriteAllText(@$"{path}\\LayoutCoordinate.json", jsonLayoutCoordinate);
+            //File.WriteAllText(@$"{path}\\PixelCoordinate.json", jsonPixelCoordinate);
 
-            var size = new Size(data.FullBoardLayout.Width, data.FullBoardLayout.Height);
-            var mask = new Mat(size, MatType.CV_8UC1, Scalar.All(0));
-            var maskNew = new Mat();
-            foreach (var fullBoardContour in result.FullBoardContoursBasedEdgeFid)
-            {
-                var allTiledUnitsCombined = fullBoardContour.ContourGroups;
-                maskNew = DrawContours(allTiledUnitsCombined, mask);
-            }
+            //var size = new Size(data.FullBoardLayout.Width, data.FullBoardLayout.Height);
+            //var mask = new Mat(size, MatType.CV_8UC1, Scalar.All(0));
+            //var maskNew = new Mat();
+            //foreach (var fullBoardContour in result.FullBoardContoursBasedEdgeFid)
+            //{
+            //    var allTiledUnitsCombined = fullBoardContour.ContourGroups;
+            //    maskNew = DrawContours(allTiledUnitsCombined, mask);
+            //}
             //Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\mask_all_processed_units.png", maskNew);
         }
 
@@ -763,7 +763,8 @@ namespace ImageSegmentation
             var blocksRows = (int)(totalRows / blocks);
             var blocksHeight = (int)(imageHeight / blocks);
 
-            var mergedContours = new Dictionary<string, List<Point[]>>();
+            // Dictionary to store contours by label name with their position info
+            var mergedContours = new Dictionary<string, List<(Point[] Contour, int Block, int Row, int Col)>>();
             if (normalizedTemplateUnitContours == null) return new List<ContourLabel>();
 
             for (int b = 0; b < blocks; b++)
@@ -773,11 +774,14 @@ namespace ImageSegmentation
                 {
                     for (int c = 1; c <= totalCols; c++)
                     {
-                        resultToUpdate.LayoutCoordinate.Add(new LabeledContourGenerator.Coordinate { Row = r, Col = c });
+                        resultToUpdate.LayoutCoordinate.Add(new LabeledContourGenerator.Coordinate { X = r, Y = c });
 
                         int currentUnitOffsetX = (c - currCols) * unitWidth;
                         int currentUnitOffsetY = (r - currRows) * unitHeight + blockH;
-                        resultToUpdate.PixelCoordinate.Add(new LabeledContourGenerator.Coordinate { Row = currentUnitOffsetX - cutUnit[0], Col = currentUnitOffsetY - cutUnit[1] });
+                        // TODO 判断鼠标在界面显示的坐标落在哪个颗内
+                        为何 - cutUnit[0]？
+                        resultToUpdate.PixelCoordinateBaseEdgeFid.Add(new LabeledContourGenerator.Coordinate { X = currentUnitOffsetX - cutUnit[0], Y = currentUnitOffsetY - cutUnit[1] });
+                        resultToUpdate.PixelCoordinateBaseFullBoard.Add(new LabeledContourGenerator.Coordinate { X = currentUnitOffsetX, Y = currentUnitOffsetY });
 
                         Point offset = new Point(currentUnitOffsetX, currentUnitOffsetY);
 
@@ -790,19 +794,50 @@ namespace ImageSegmentation
                             var baseLabelName = translatedLabel.LabelName;
                             if (!mergedContours.ContainsKey(baseLabelName))
                             {
-                                mergedContours[baseLabelName] = new List<Point[]>();
+                                mergedContours[baseLabelName] = new List<(Point[] Contour, int Block, int Row, int Col)>();
                             }
-                            mergedContours[baseLabelName].AddRange(translatedLabel.Contours);
+                            foreach (var contour in translatedLabel.Contours)
+                            {
+                                mergedContours[baseLabelName].Add((contour, b + 1, r, c));
+                            }
                         }
                     }
                 }
             }
 
-            return mergedContours.Select(kvp => new ContourLabel
+            File.WriteAllText(Path.Combine("E:\\ImgSegment\\BoardSide\\BOC", "PixelCoordinateBaseFullBoard.json"), JsonConvert.SerializeObject(resultToUpdate.PixelCoordinateBaseFullBoard, Formatting.Indented));
+
+            // Create final ContourLabel list with numbered contours under each label
+            var result = new List<ContourLabel>();
+            foreach (var kvp in mergedContours)
             {
-                LabelName = kvp.Key,
-                Contours = kvp.Value.ToArray()
-            }).ToList();
+                var labelName = kvp.Key;
+                var contours = kvp.Value;
+                
+                // Sort contours by block, row, and column
+                contours.Sort((a, b) =>
+                {
+                    if (a.Block != b.Block) return a.Block.CompareTo(b.Block);
+                    if (a.Row != b.Row) return a.Row.CompareTo(b.Row);
+                    return a.Col.CompareTo(b.Col);
+                });
+
+                // Create a single ContourLabel for this label name with all numbered contours
+                var numberedContours = new List<Point[]>();
+                for (int i = 0; i < contours.Count; i++)
+                {
+                    numberedContours.Add(contours[i].Contour);
+                }
+
+                var labelWithNumberedContours = new ContourLabel
+                {
+                    LabelName = labelName,
+                    Contours = numberedContours.ToArray()
+                };
+                result.Add(labelWithNumberedContours);
+            }
+
+            return result;
         }
     }
 

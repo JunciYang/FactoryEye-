@@ -58,13 +58,13 @@ namespace ImageSegmentation
             }
 
             //1.应用CLAHE增强对比度
-            using var claheEnhanced = EnhanceContrast(grayImage);
+            var claheEnhanced = EnhanceContrast(grayImage);
 
             // 2. 局部对比度增强
-            using var localEnhanced = LocalContrastEnhancement(claheEnhanced); // 阈值太高，若遇到前景背景不好分离的时候可以考虑
+            var localEnhanced = LocalContrastEnhancement(claheEnhanced); // 阈值太高，若遇到前景背景不好分离的时候可以考虑
 
             // 3. 使用Bilateral滤波保持边缘的同时减少噪声
-            using var bilateral = new Mat();
+            var bilateral = new Mat();
             Cv2.BilateralFilter(localEnhanced, bilateral, 9, 75, 75);
             var threshold = Cv2.Threshold(bilateral, binaryImage, minValue, maxValue, thresholdTypes);
             
@@ -235,7 +235,7 @@ namespace ImageSegmentation
         }
 
 
-        private static Mat EnhanceContrast(Mat input)
+        public static Mat EnhanceContrast(Mat input)
         {
             // 1. CLAHE（限制对比度自适应直方图均衡）
             var clahe = Cv2.CreateCLAHE(clipLimit: 1.0, tileGridSize: new Size(8, 8));
@@ -247,7 +247,7 @@ namespace ImageSegmentation
         /// <summary>
         /// 使用局部对比度增强
         /// </summary>
-        private static Mat LocalContrastEnhancement(Mat input)
+        public static Mat LocalContrastEnhancement(Mat input)
         {
             var result = new Mat();
             using (var mean = new Mat())

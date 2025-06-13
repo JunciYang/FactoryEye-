@@ -67,7 +67,21 @@ namespace ImageSegmentation.WinFormsUI
             public string Name { get; set; }
             public Color DisplayColor { get; set; }
             public List<ContourData> Contours { get; set; }
+            public Point? LayoutPosition { get; set; } // Add layout position tracking
         }
+
+        // Add selected blob tracking
+        private (LayerInfo Layer, ContourData Contour)? _selectedBlob = null;
+        private (LayerInfo Layer, ContourData Contour)? _hoveredBlob = null;
+        private ToolTip _toolTip;
+
+        // Add layout information
+        private int _unitWidth;
+        private int _unitHeight;
+        private int _totalRows;
+        private int _totalCols;
+        private int _blocks;
+        private int[] _cutUnit;
 
         // Custom converter to handle Point deserialization from an object { "X": x, "Y": y }
         public class PointConverter : JsonConverter<Point>
@@ -98,6 +112,15 @@ namespace ImageSegmentation.WinFormsUI
         {
             InitializeComponent();
             ApplyCustomStyles();
+            
+            // Initialize tooltip
+            _toolTip = new ToolTip();
+            _toolTip.AutoPopDelay = 5000;
+            _toolTip.InitialDelay = 500;
+            _toolTip.ReshowDelay = 500;
+            _toolTip.ShowAlways = true;
+            _toolTip.UseAnimation = true;
+            _toolTip.UseFading = true;
         }
 
         #region
@@ -278,20 +301,15 @@ namespace ImageSegmentation.WinFormsUI
 
         private void LoadLayers_Click(object sender, EventArgs e)
         {
-            string selectedPath = "";
-            using (var dialog = new FolderBrowserDialog())
+            using (var folderDialog = new FolderBrowserDialog())
             {
-                dialog.Description = "请选择包含图层数据的文件夹";
-                // 你可以设置一个默认的起始路径
-                // dialog.SelectedPath = "E:\\ImgSegment\\Test\\"; 
-                if (dialog.ShowDialog() != DialogResult.OK)
+                folderDialog.Description = "Select the directory containing layer data";
+                if (folderDialog.ShowDialog() == DialogResult.OK)
                 {
-                    return; // 用户取消了选择
+                    var selectedPath = folderDialog.SelectedPath;
+                    LoadLayersFromPath(selectedPath);
                 }
-                selectedPath = dialog.SelectedPath;
             }
-
-            LoadLayersFromPath(selectedPath);
         }
 
         private void LoadLayersFromPath(string selectedPath)
@@ -318,6 +336,7 @@ namespace ImageSegmentation.WinFormsUI
                 _fullBoardSize = new Size(metadata.FullBoardLayout.Width, metadata.FullBoardLayout.Height);
                 _unitLayoutSize = new Size(metadata.UnitLayout.Width, metadata.UnitLayout.Height);
                 _originOffset = new Point(metadata.OriginOffsetX, metadata.OriginOffsetY);
+                //_originOffset = new Point(0, 0);
             }
             else
             {
@@ -334,7 +353,11 @@ namespace ImageSegmentation.WinFormsUI
                 {
                     var flagNode = new TreeNode(flagName) { Tag = flagEnum };
                     _layerTreeView.Nodes.Add(flagNode);
-                    
+
+                    // Create FlagInfo for this flag
+                    var flagInfo = new FlagInfo { Name = flagName, Layers = new List<LayerInfo>() };
+                    _flagInfos.Add(flagInfo);
+
                     var layerFiles = Directory.GetFiles(flagDir, "*.json", SearchOption.TopDirectoryOnly);
                     foreach (var layerFile in layerFiles)
                     {
@@ -349,6 +372,9 @@ namespace ImageSegmentation.WinFormsUI
                         };
                         var layerNode = new TreeNode(layerName) { Tag = layerInfo };
                         flagNode.Nodes.Add(layerNode);
+
+                        // Add layer to FlagInfo
+                        flagInfo.Layers.Add(layerInfo);
                     }
                 }
             }
@@ -463,7 +489,36 @@ namespace ImageSegmentation.WinFormsUI
                                     var drawingPoints = contourData.Points.Select(p => new Point(p.X + currentOffset.X, p.Y + currentOffset.Y)).ToArray();
                                     if (drawingPoints.Length > 2)
                                     {
-                                        g.FillPolygon(brush, drawingPoints);
+                                        // Check if this is the selected blob
+                                        if (_selectedBlob.HasValue && _selectedBlob.Value.Layer == layer && _selectedBlob.Value.Contour == contourData)
+                                        {
+                                            // Draw selected blob with a different color and border
+                                            using (var selectedBrush = new SolidBrush(Color.FromArgb(200, layer.DisplayColor)))
+                                            {
+                                                g.FillPolygon(selectedBrush, drawingPoints);
+                                            }
+                                            using (var selectedPen = new Pen(Color.Yellow, 2f / _zoomFactor))
+                                            {
+                                                g.DrawPolygon(selectedPen, drawingPoints);
+                                            }
+                                        }
+                                        // Check if this is the hovered blob
+                                        else if (_hoveredBlob.HasValue && _hoveredBlob.Value.Layer == layer && _hoveredBlob.Value.Contour == contourData)
+                                        {
+                                            // Draw hovered blob with a different color and border
+                                            using (var hoverBrush = new SolidBrush(Color.FromArgb(180, layer.DisplayColor)))
+                                            {
+                                                g.FillPolygon(hoverBrush, drawingPoints);
+                                            }
+                                            using (var hoverPen = new Pen(Color.White, 1.5f / _zoomFactor))
+                                            {
+                                                g.DrawPolygon(hoverPen, drawingPoints);
+                                            }
+                                        }
+                                        else
+                                        {
+                                            g.FillPolygon(brush, drawingPoints);
+                                        }
                                     }
                                 }
                             }
@@ -576,38 +631,174 @@ namespace ImageSegmentation.WinFormsUI
             _pictureBox.Invalidate();
         }
 
-        private void PictureBox_MouseDown(object? sender, MouseEventArgs e)
+        private void PictureBox_MouseDown(object sender, MouseEventArgs e)
         {
-            if (e.Button == MouseButtons.Left || e.Button == MouseButtons.Middle)
+            if (e.Button == MouseButtons.Left)
             {
                 _isPanning = true;
                 _panStartPoint = e.Location;
                 _pictureBox.Cursor = Cursors.SizeAll;
             }
+            else if (e.Button == MouseButtons.Right)
+            {
+                // Convert mouse coordinates to world coordinates
+                var worldX = (e.Location.X / _zoomFactor) + _viewOffset.X;
+                var worldY = (e.Location.Y / _zoomFactor) + _viewOffset.Y;
+
+                Point currentOffset = (_currentViewMode == BoardInfo.BOARDSIDE.ToString()) ? _originOffset : Point.Empty;
+                TreeNode? activeFlagNode = _layerTreeView.Nodes
+                    .OfType<TreeNode>()
+                     .FirstOrDefault(n => n.Text.Equals(_currentViewMode, StringComparison.OrdinalIgnoreCase));
+
+                // Check if click is within any contour
+                foreach (var flagInfo in _flagInfos)
+                {
+                    if (flagInfo.Name != _currentViewMode) continue;
+
+                    foreach (var layer in flagInfo.Layers)
+                    {
+                        foreach (var contourData in layer.Contours)
+                        {
+                            var drawingPoints = contourData.Points.Select(p => new Point(p.X + currentOffset.X, p.Y + currentOffset.Y)).ToArray();
+                            if (IsPointInPolygon(new PointF(worldX, worldY), drawingPoints))
+                            {
+                                EditBlobLabel(layer, contourData);
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
         }
 
-        private void PictureBox_MouseMove(object? sender, MouseEventArgs e)
+        private void EditBlobLabel(LayerInfo layer, ContourData contour)
+        {
+            using (var form = new Form())
+            {
+                form.Text = "Edit Blob Label";
+                form.Size = new Size(500, 300);
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.FormBorderStyle = FormBorderStyle.FixedDialog;
+                form.MaximizeBox = false;
+                form.MinimizeBox = false;
+
+                var label = new Label
+                {
+                    Text = "New Label Name:",
+                    Location = new Point(10, 20),
+                    AutoSize = true
+                };
+
+                var textBox = new TextBox
+                {
+                    Text = layer.Name,
+                    Location = new Point(10, 40),
+                    Width = 260
+                };
+
+                var okButton = new Button
+                {
+                    Text = "OK",
+                    DialogResult = DialogResult.OK,
+                    Location = new Point(120, 100)
+                };
+
+                var cancelButton = new Button
+                {
+                    Text = "Cancel",
+                    DialogResult = DialogResult.Cancel,
+                    Location = new Point(200, 100)
+                };
+
+                form.Controls.AddRange(new Control[] { label, textBox, okButton, cancelButton });
+                form.AcceptButton = okButton;
+                form.CancelButton = cancelButton;
+
+                if (form.ShowDialog() == DialogResult.OK && !string.IsNullOrWhiteSpace(textBox.Text))
+                {
+                    // Create new layer with the new name
+                    var newLayer = new LayerInfo
+                    {
+                        Name = textBox.Text,
+                        DisplayColor = layer.DisplayColor,
+                        Contours = new List<ContourData> { contour }
+                    };
+
+                    // Add new layer to the current flag
+                    var currentFlag = _flagInfos.FirstOrDefault(f => f.Name == _currentViewMode);
+                    if (currentFlag != null)
+                    {
+                        currentFlag.Layers.Add(newLayer);
+
+                        // Add new node to tree view
+                        var flagNode = _layerTreeView.Nodes.Cast<TreeNode>().FirstOrDefault(n => n.Text == _currentViewMode);
+                        if (flagNode != null)
+                        {
+                            var newNode = new TreeNode(textBox.Text) { Tag = newLayer };
+                            flagNode.Nodes.Add(newNode);
+                        }
+
+                        _pictureBox.Invalidate();
+                    }
+                }
+            }
+        }
+
+        private void PictureBox_MouseMove(object sender, MouseEventArgs e)
         {
             if (_isPanning)
             {
-                // Calculate the change in mouse position
-                int dx = e.X - _panStartPoint.X;
-                int dy = e.Y - _panStartPoint.Y;
-
-                // Update the view offset based on the mouse movement
-                _viewOffset.X -= dx / _zoomFactor;
-                _viewOffset.Y -= dy / _zoomFactor;
-
-                // Update the starting point for the next mouse move event
+                var dx = e.Location.X - _panStartPoint.X;
+                var dy = e.Location.Y - _panStartPoint.Y;
+                _viewOffset = new PointF(_viewOffset.X - dx / _zoomFactor, _viewOffset.Y - dy / _zoomFactor);
                 _panStartPoint = e.Location;
-
                 _pictureBox.Invalidate();
+                return;
+            }
+            else
+            {
+                // 鼠标悬停的像素坐标
+                float worldX = _viewOffset.X + e.X / _zoomFactor;
+                float worldY = _viewOffset.Y + e.Y / _zoomFactor;
+                Point worldPoint = new Point((int)worldX, (int)worldY);
+
+                // 判断是整板还是单颗
+                Point currentOffset = (_currentViewMode == BoardInfo.BOARDSIDE.ToString()) ? _originOffset : Point.Empty;
+                TreeNode? activeFlagNode = _layerTreeView.Nodes
+                    .OfType<TreeNode>()
+                     .FirstOrDefault(n => n.Text.Equals(_currentViewMode, StringComparison.OrdinalIgnoreCase));
+                
+                if (activeFlagNode != null)
+                {
+                    _hoveredBlob = null; // Reset hover state
+                    foreach (TreeNode layerNode in activeFlagNode.Nodes)
+                    {
+                        if (layerNode.Checked && layerNode.Tag is LayerInfo layer)
+                        {
+                            for (int i = 0; i < layer.Contours.Count; i++) 
+                            {
+                                var contourData = layer.Contours[i];
+                                var drawingPoints = contourData.Points.Select(p => new Point(p.X + currentOffset.X, p.Y + currentOffset.Y)).ToArray();
+                                if (IsPointInPolygon(worldPoint, drawingPoints))
+                                {
+                                    var num = i;
+                                    _hoveredBlob = (layer, contourData);
+                                    _toolTip.SetToolTip(_pictureBox, $"{layerNode.Text}{num + 1}");
+                                    _pictureBox.Invalidate();
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                    _toolTip.SetToolTip(_pictureBox, "");
+                    _pictureBox.Invalidate();
+                }
             }
         }
 
         private void PictureBox_MouseUp(object? sender, MouseEventArgs e)
         {
-            if (e.Button == MouseButtons.Left || e.Button == MouseButtons.Middle)
+            if (e.Button == MouseButtons.Left)
             {
                 _isPanning = false;
                 _pictureBox.Cursor = Cursors.Default;
@@ -641,9 +832,53 @@ namespace ImageSegmentation.WinFormsUI
             public int OriginOffsetY { get; set; }
         }
 
+        private class LayoutData
+        {
+            public UnitLayoutInfo UnitLayout { get; set; }
+            public FullBoardLayoutInfo FullBoardLayout { get; set; }
+            public CutPositionInfo CutPosition { get; set; }
+        }
+
+        private class UnitLayoutInfo
+        {
+            public int Width { get; set; }
+            public int Height { get; set; }
+        }
+
+        private class FullBoardLayoutInfo
+        {
+            public int Width { get; set; }
+            public int Height { get; set; }
+            public int Rows { get; set; }
+            public int Cols { get; set; }
+            public int Blocks { get; set; }
+        }
+
+        private class CutPositionInfo
+        {
+            public int[] Unit { get; set; }
+        }
+
         private static Color GetRandomColor()
         {
             return Color.FromArgb(150, _random.Next(128, 256), _random.Next(128, 256), _random.Next(128, 256));
+        }
+
+        private bool IsPointInPolygon(PointF point, Point[] polygon)
+        {
+            if (polygon == null || polygon.Length < 3)
+                return false;
+
+            bool inside = false;
+            for (int i = 0, j = polygon.Length - 1; i < polygon.Length; j = i++)
+            {
+                if (((polygon[i].Y > point.Y) != (polygon[j].Y > point.Y)) &&
+                    (point.X < (polygon[j].X - polygon[i].X) * (point.Y - polygon[i].Y) / (polygon[j].Y - polygon[i].Y) + polygon[i].X))
+                {
+                    inside = !inside;
+                }
+            }
+            return inside;
         }
     }
 } 

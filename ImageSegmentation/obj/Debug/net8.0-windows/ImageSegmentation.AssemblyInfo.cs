@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ImageSegmentation")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8c756a6a27277ec943ad05d90ec47971272db90d")]
 [assembly: System.Reflection.AssemblyProductAttribute("ImageSegmentation")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ImageSegmentation")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
