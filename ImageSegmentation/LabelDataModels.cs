@@ -125,7 +125,8 @@ namespace ImageSegmentation
             public List<BoardContour> FullBoardContoursBasedEdgeFid { get; set; }
             public int Threshold { get; set; }
             public List<Coordinate> LayoutCoordinate { get; set; }
-            public List<Coordinate> PixelCoordinate { get; set; }
+            public List<Coordinate> PixelCoordinateBaseEdgeFid { get; set; }
+            public List<Coordinate> PixelCoordinateBaseFullBoard { get; set; }
 
             public List<FlagsBinaryMask> FlagsBinaryMasks { get; set; }
             public List<FlagsBinaryMask> FlagsColorMasks { get; set; }
@@ -142,7 +143,8 @@ namespace ImageSegmentation
                 FullBoardContours = new List<BoardContour>();
                 FullBoardContoursBasedEdgeFid = new List<BoardContour>();
                 LayoutCoordinate = new List<Coordinate>();
-                PixelCoordinate = new List<Coordinate>();
+                PixelCoordinateBaseEdgeFid = new List<Coordinate>();
+                PixelCoordinateBaseFullBoard = new List<Coordinate>();
                 FlagsBinaryMasks = new List<FlagsBinaryMask>();
                 FlagsColorMasks = new List<FlagsBinaryMask>();
                 FlagsGrayMasks = new List<FlagsBinaryMask>();
@@ -205,19 +207,35 @@ namespace ImageSegmentation
         {
             public string LabelName { get; set; }
             public Point[][] Contours { get; set; }
+            public List<ContourWithPosition> ContourPositions { get; set; }
         }
 
-        public  class LabelAndAllContoursForFullBoard
+        public class ContourPosition
+        {
+            public Point[] Contour { get; set; }
+            public int Block { get; set; }
+            public int Row { get; set; }
+            public int Col { get; set; }
+        }
+
+        public class ContourWithPosition
+        {
+            public Point[] Contour { get; set; }
+            public int Block { get; set; }
+            public int Row { get; set; }
+            public int Col { get; set; }
+        }
+
+        public class LabeledContours
         {
             public string LabelName { get; set; }
-            public List<Point[][]> LabelAllContours { get; set; }
+            public List<ContourWithPosition> Contours { get; set; } = new List<ContourWithPosition>();
         }
-
 
         public class Coordinate
         {
-            public int Row { get; set; }
-            public int Col { get; set; }
+            public int X { get; set; }
+            public int Y { get; set; }
         }
 
         /// <summary>

@@ -142,7 +142,7 @@ namespace ImageSegmentation
             // Save global metadata with both layout sizes
             var globalMetadata = new
             {
-                FullBoardLayout = new { data.FullBoardLayout.Rows, data.FullBoardLayout.Cols, data.FullBoardLayout.Width, data.FullBoardLayout.Height },
+                FullBoardLayout = new { data.FullBoardLayout.Blocks, data.FullBoardLayout.Rows, data.FullBoardLayout.Cols, data.FullBoardLayout.Width, data.FullBoardLayout.Height },
                 UnitLayout = new { data.UnitLayout.Rows, data.UnitLayout.Cols, data.UnitLayout.Width, data.UnitLayout.Height },
                 OriginOffsetX = SystemMgr.EdgeFidCutPosition.X,
                 OriginOffsetY = SystemMgr.EdgeFidCutPosition.Y
@@ -205,45 +205,25 @@ namespace ImageSegmentation
             Directory.CreateDirectory(directory);
             int minX = int.MaxValue, minY = int.MaxValue, maxX = int.MinValue, maxY = int.MinValue;
             bool hasPoints = false;
-
             if (boardContour.ContourGroups != null)
             {
                 foreach (var label in boardContour.ContourGroups)
                 {
-                    if (label.Contours != null && label.Contours.Any() && !string.IsNullOrWhiteSpace(label.LabelName))
+                    var ss = new ContourLabel
                     {
-                        var fileName = string.Join("_", label.LabelName.Split(Path.GetInvalidFileNameChars()));
-                        var filePath = Path.Combine(directory, $"{fileName}.json");
-                        var jsonContent = JsonConvert.SerializeObject(label.Contours, Formatting.Indented);
-                        File.WriteAllText(filePath, jsonContent);
+                        LabelName = label.LabelName,
+                        Contours = label.Contours,
+                        ContourPositions = label.ContourPositions
+                    };
 
-                        foreach (var contour in label.Contours)
-                        {
-                            if (contour == null) continue;
-                            foreach (var point in contour)
-                            {
-                                minX = Math.Min(minX, point.X);
-                                minY = Math.Min(minY, point.Y);
-                                maxX = Math.Max(maxX, point.X);
-                                maxY = Math.Max(maxY, point.Y);
-                                hasPoints = true;
-                            }
-                        }
-                    }
+                    var fileName = string.Join("_", label.LabelName.Split(Path.GetInvalidFileNameChars()));
+                    var filePath = Path.Combine(directory, $"{fileName}.json");
+                    var jsonContent = JsonConvert.SerializeObject(ss, Formatting.Indented);
+                    File.WriteAllText(filePath, jsonContent);
                 }
             }
 
-            if (hasPoints)
-            {
-                var flagMetadata = new
-                {
-                    X = minX,
-                    Y = minY,
-                    Width = maxX - minX,
-                    Height = maxY - minY,
-                    Layout = layoutData
-                };
-            }
+            
         }
 
         private void SaveLayoutArtifacts(LabelProcessingResult result, DataInfo.Root data)
@@ -752,9 +732,11 @@ namespace ImageSegmentation
             var unitHeight = data.UnitLayout.Height;
             var currRows = data.UnitLayout.Rows;
             var currCols = data.UnitLayout.Cols;
+
             var blocks = data.FullBoardLayout.Blocks;
             var totalRows = data.FullBoardLayout.Rows;
             var totalCols = data.FullBoardLayout.Cols;
+
             var cutUnit = data.CutPosition.Unit;
 
             var imageWidth = data.FullBoardLayout.Width;
@@ -763,13 +745,17 @@ namespace ImageSegmentation
             var blocksRows = (int)(totalRows / blocks);
             var blocksHeight = (int)(imageHeight / blocks);
 
+            var unitOffsetX = cutUnit[0] - SystemMgr.EdgeFidCutPosition.X;
+            var unitOffsetY = cutUnit[1] - SystemMgr.EdgeFidCutPosition.Y;
+
             // Dictionary to store contours by label name with their position info
-            var mergedContours = new Dictionary<string, List<(Point[] Contour, int Block, int Row, int Col)>>();
+            var mergedContours = new Dictionary<string, LabeledContours>();
             if (normalizedTemplateUnitContours == null) return new List<ContourLabel>();
 
             for (int b = 0; b < blocks; b++)
             {
                 var blockH = blocksHeight * b;
+
                 for (int r = 1; r <= blocksRows; r++)
                 {
                     for (int c = 1; c <= totalCols; c++)
@@ -778,9 +764,10 @@ namespace ImageSegmentation
 
                         int currentUnitOffsetX = (c - currCols) * unitWidth;
                         int currentUnitOffsetY = (r - currRows) * unitHeight + blockH;
+
                         // TODO 判断鼠标在界面显示的坐标落在哪个颗内
-                        为何 - cutUnit[0]？
-                        resultToUpdate.PixelCoordinateBaseEdgeFid.Add(new LabeledContourGenerator.Coordinate { X = currentUnitOffsetX - cutUnit[0], Y = currentUnitOffsetY - cutUnit[1] });
+                        //为何 - cutUnit[0]？
+                        resultToUpdate.PixelCoordinateBaseEdgeFid.Add(new LabeledContourGenerator.Coordinate { X = currentUnitOffsetX - unitOffsetX, Y = currentUnitOffsetY - unitOffsetY });
                         resultToUpdate.PixelCoordinateBaseFullBoard.Add(new LabeledContourGenerator.Coordinate { X = currentUnitOffsetX, Y = currentUnitOffsetY });
 
                         Point offset = new Point(currentUnitOffsetX, currentUnitOffsetY);
@@ -794,11 +781,21 @@ namespace ImageSegmentation
                             var baseLabelName = translatedLabel.LabelName;
                             if (!mergedContours.ContainsKey(baseLabelName))
                             {
-                                mergedContours[baseLabelName] = new List<(Point[] Contour, int Block, int Row, int Col)>();
+                                mergedContours[baseLabelName] = new LabeledContours 
+                                { 
+                                    LabelName = baseLabelName,
+                                    Contours = new List<ContourWithPosition>()
+                                };
                             }
                             foreach (var contour in translatedLabel.Contours)
                             {
-                                mergedContours[baseLabelName].Add((contour, b + 1, r, c));
+                                mergedContours[baseLabelName].Contours.Add(new ContourWithPosition
+                                {
+                                    Contour = contour,
+                                    Block = b + 1,
+                                    Row = r,
+                                    Col = c
+                                });
                             }
                         }
                     }
@@ -811,11 +808,10 @@ namespace ImageSegmentation
             var result = new List<ContourLabel>();
             foreach (var kvp in mergedContours)
             {
-                var labelName = kvp.Key;
-                var contours = kvp.Value;
+                var labeledContours = kvp.Value;
                 
                 // Sort contours by block, row, and column
-                contours.Sort((a, b) =>
+                labeledContours.Contours.Sort((a, b) =>
                 {
                     if (a.Block != b.Block) return a.Block.CompareTo(b.Block);
                     if (a.Row != b.Row) return a.Row.CompareTo(b.Row);
@@ -824,15 +820,25 @@ namespace ImageSegmentation
 
                 // Create a single ContourLabel for this label name with all numbered contours
                 var numberedContours = new List<Point[]>();
-                for (int i = 0; i < contours.Count; i++)
+                var contourPositions = new List<ContourWithPosition>();
+                
+                foreach (var contourWithPos in labeledContours.Contours)
                 {
-                    numberedContours.Add(contours[i].Contour);
+                    numberedContours.Add(contourWithPos.Contour);
+                    contourPositions.Add(new ContourWithPosition
+                    { 
+                        Contour = contourWithPos.Contour,
+                        Block = contourWithPos.Block,
+                        Row = contourWithPos.Row,
+                        Col = contourWithPos.Col
+                    });
                 }
 
                 var labelWithNumberedContours = new ContourLabel
                 {
-                    LabelName = labelName,
-                    Contours = numberedContours.ToArray()
+                    LabelName = labeledContours.LabelName,
+                    //Contours = numberedContours.ToArray(),
+                    ContourPositions = contourPositions
                 };
                 result.Add(labelWithNumberedContours);
             }

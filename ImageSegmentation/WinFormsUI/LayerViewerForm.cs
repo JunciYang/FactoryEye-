@@ -10,6 +10,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Size = System.Drawing.Size;
 using Point = System.Drawing.Point;
+using static ImageSegmentation.LabeledContourGenerator;
 
 namespace ImageSegmentation.WinFormsUI
 {
@@ -18,10 +19,13 @@ namespace ImageSegmentation.WinFormsUI
         //private readonly string _layerDirectory = "E:\\ImgSegment\\BoardSide\\HDSR01 783HDS\\Test";
         private List<FlagInfo> _flagInfos = new List<FlagInfo>();
         private Size _fullBoardSize = Size.Empty;
+        private Size _unitLayout = Size.Empty;
         private Size _unitLayoutSize = Size.Empty;
         private Size _boardSize = Size.Empty;
         private Point _originOffset = Point.Empty;
         private string _currentViewMode = BoardInfo.BOARDSIDE.ToString(); // "BOARDSIDE" or "UNIT"
+        private int _unitNo;
+        private string _currentPath; // 添加当前路径字段
 
         // Fields for Zoom and Pan
         private float _zoomFactor = 1.0f;
@@ -34,11 +38,17 @@ namespace ImageSegmentation.WinFormsUI
         {
             public Point[] Points { get; }
             public Rectangle BoundingBox { get; }
+            public int Row { get; set; }
+            public int Col { get; set; }
+            public int Blocks { get; set; }
 
-            public ContourData(Point[] points)
+            public ContourData(Point[] points, int row = 0, int col = 0, int blocks = 0)
             {
                 Points = points;
                 BoundingBox = CalculateBoundingBox(points);
+                Row = row;
+                Col = col;
+                Blocks = blocks;
             }
 
             private static Rectangle CalculateBoundingBox(Point[] points)
@@ -46,18 +56,11 @@ namespace ImageSegmentation.WinFormsUI
                 if (points == null || points.Length == 0)
                     return Rectangle.Empty;
 
-                int minX = points[0].X;
-                int minY = points[0].Y;
-                int maxX = points[0].X;
-                int maxY = points[0].Y;
+                int minX = points.Min(p => p.X);
+                int minY = points.Min(p => p.Y);
+                int maxX = points.Max(p => p.X);
+                int maxY = points.Max(p => p.Y);
 
-                for (int i = 1; i < points.Length; i++)
-                {
-                    minX = Math.Min(minX, points[i].X);
-                    minY = Math.Min(minY, points[i].Y);
-                    maxX = Math.Max(maxX, points[i].X);
-                    maxY = Math.Max(maxY, points[i].Y);
-                }
                 return new Rectangle(minX, minY, maxX - minX, maxY - minY);
             }
         }
@@ -67,7 +70,6 @@ namespace ImageSegmentation.WinFormsUI
             public string Name { get; set; }
             public Color DisplayColor { get; set; }
             public List<ContourData> Contours { get; set; }
-            public Point? LayoutPosition { get; set; } // Add layout position tracking
         }
 
         // Add selected blob tracking
@@ -76,8 +78,8 @@ namespace ImageSegmentation.WinFormsUI
         private ToolTip _toolTip;
 
         // Add layout information
-        private int _unitWidth;
-        private int _unitHeight;
+        private int _unitRows;
+        private int _unitCols;
         private int _totalRows;
         private int _totalCols;
         private int _blocks;
@@ -314,6 +316,7 @@ namespace ImageSegmentation.WinFormsUI
 
         private void LoadLayersFromPath(string selectedPath)
         {
+            _currentPath = selectedPath; // 保存当前路径
             _layerTreeView.Nodes.Clear();
             _flagInfos.Clear();
             _fullBoardSize = Size.Empty;
@@ -334,16 +337,19 @@ namespace ImageSegmentation.WinFormsUI
                 var metaJson = File.ReadAllText(metaFile);
                 var metadata = JsonConvert.DeserializeObject<BoardMetadata>(metaJson);
                 _fullBoardSize = new Size(metadata.FullBoardLayout.Width, metadata.FullBoardLayout.Height);
+                //_unitLayout = new Size(metadata.FullBoardLayout.Rows, metadata.FullBoardLayout.Cols);
+                _totalCols = metadata.FullBoardLayout.Cols;
+                _totalRows = metadata.FullBoardLayout.Rows;
                 _unitLayoutSize = new Size(metadata.UnitLayout.Width, metadata.UnitLayout.Height);
+                _blocks = metadata.FullBoardLayout.Blocks;
                 _originOffset = new Point(metadata.OriginOffsetX, metadata.OriginOffsetY);
-                //_originOffset = new Point(0, 0);
             }
             else
             {
-                MessageBox.Show("全局 metadata.json 未找到，无法确定电路板尺寸。", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("全局 metadata.json 未找到，无法确定尺寸。", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
-            
+
             _layerTreeView.BeginUpdate();
             var flagSubDirs = Directory.GetDirectories(selectedPath);
             foreach (var flagDir in flagSubDirs)
@@ -363,18 +369,34 @@ namespace ImageSegmentation.WinFormsUI
                     {
                         var layerName = Path.GetFileNameWithoutExtension(layerFile);
                         var json = File.ReadAllText(layerFile);
-                        var contours = JsonConvert.DeserializeObject<List<Point[]>>(json, new PointConverter());
-                        var layerInfo = new LayerInfo
+                        var contourLabel = JsonConvert.DeserializeObject<ContourLabel>(json, new PointConverter());
+                        
+                        if (contourLabel != null)
                         {
-                            Name = layerName,
-                            DisplayColor = GetRandomColor(),
-                            Contours = contours.Select(p => new ContourData(p)).ToList()
-                        };
-                        var layerNode = new TreeNode(layerName) { Tag = layerInfo };
-                        flagNode.Nodes.Add(layerNode);
+                            var layerInfo = new LayerInfo
+                            {
+                                Name = layerName,
+                                DisplayColor = GetRandomColor(),
+                                Contours = contourLabel.ContourPositions != null 
+                                    ? contourLabel.ContourPositions.Select(p => 
+                                        new ContourData(
+                                            p.Contour.Select(op => 
+                                                new System.Drawing.Point(op.X, op.Y)).ToArray(),
+                                            p.Row,
+                                            p.Col,
+                                            p.Block
+                                        )).ToList()
+                                    : contourLabel.Contours.Select(p => 
+                                        new ContourData(p.Select(op => 
+                                            new System.Drawing.Point(op.X, op.Y)).ToArray())).ToList()
+                            };
 
-                        // Add layer to FlagInfo
-                        flagInfo.Layers.Add(layerInfo);
+                            var layerNode = new TreeNode(layerName) { Tag = layerInfo };
+                            flagNode.Nodes.Add(layerNode);
+
+                            // Add layer to FlagInfo
+                            flagInfo.Layers.Add(layerInfo);
+                        }
                     }
                 }
             }
@@ -439,27 +461,33 @@ namespace ImageSegmentation.WinFormsUI
         {
             if (_boardSize.IsEmpty) return;
 
-            var g = e.Graphics;
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            e.Graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            e.Graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
 
             // Apply transformations for pan and zoom
-            g.ScaleTransform(_zoomFactor, _zoomFactor);
-            g.TranslateTransform(-_viewOffset.X, -_viewOffset.Y);
+            e.Graphics.ScaleTransform(_zoomFactor, _zoomFactor);
+            e.Graphics.TranslateTransform(-_viewOffset.X, -_viewOffset.Y);
 
             // Draw a border to indicate the bounds of the board layout
             using (var borderPen = new Pen(Color.DarkGray, 1f / _zoomFactor))
             {
                 borderPen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
-                g.DrawRectangle(borderPen, 0, 0, _boardSize.Width, _boardSize.Height);
+                e.Graphics.DrawRectangle(borderPen, 0, 0, _boardSize.Width, _boardSize.Height);
             }
 
-            // Culling: Calculate the visible rectangle in world coordinates
-            RectangleF visibleWorldRect = GetVisibleWorldRect();
-            
-            // Determine the correct offset for the current view's coordinate system
+            // 计算当前视图的可见区域（世界坐标）
+            var visibleWorldRect = GetVisibleWorldRect();
+
+            // 计算当前偏移量
             Point currentOffset = (_currentViewMode == BoardInfo.BOARDSIDE.ToString()) ? _originOffset : Point.Empty;
 
+            // 绘制所有选中的层
+            DrawLayers(e.Graphics, visibleWorldRect, currentOffset);
+        }
+
+        private void DrawLayers(Graphics g, RectangleF visibleWorldRect, Point currentOffset)
+        {
             // Find the active flag node and draw its checked layers
             TreeNode? activeFlagNode = _layerTreeView.Nodes
                 .OfType<TreeNode>()
@@ -471,60 +499,70 @@ namespace ImageSegmentation.WinFormsUI
                 {
                     if (layerNode.Checked && layerNode.Tag is LayerInfo layer)
                     {
-                        using (var brush = new SolidBrush(Color.FromArgb(150, layer.DisplayColor)))
-                        {
-                            foreach (var contourData in layer.Contours)
-                            {
-                                // Apply the view offset to the contour's bounding box for an accurate check
-                                var checkBox = new Rectangle(
-                                    contourData.BoundingBox.X + currentOffset.X,
-                                    contourData.BoundingBox.Y + currentOffset.Y,
-                                    contourData.BoundingBox.Width,
-                                    contourData.BoundingBox.Height
-                                );
+                        DrawLayer(g, layer, visibleWorldRect, currentOffset);
+                    }
+                }
+            }
+        }
 
-                                // Culling check: only draw if the contour is in the visible area
-                                if (visibleWorldRect.IntersectsWith(checkBox))
-                                {
-                                    var drawingPoints = contourData.Points.Select(p => new Point(p.X + currentOffset.X, p.Y + currentOffset.Y)).ToArray();
-                                    if (drawingPoints.Length > 2)
-                                    {
-                                        // Check if this is the selected blob
-                                        if (_selectedBlob.HasValue && _selectedBlob.Value.Layer == layer && _selectedBlob.Value.Contour == contourData)
-                                        {
-                                            // Draw selected blob with a different color and border
-                                            using (var selectedBrush = new SolidBrush(Color.FromArgb(200, layer.DisplayColor)))
-                                            {
-                                                g.FillPolygon(selectedBrush, drawingPoints);
-                                            }
-                                            using (var selectedPen = new Pen(Color.Yellow, 2f / _zoomFactor))
-                                            {
-                                                g.DrawPolygon(selectedPen, drawingPoints);
-                                            }
-                                        }
-                                        // Check if this is the hovered blob
-                                        else if (_hoveredBlob.HasValue && _hoveredBlob.Value.Layer == layer && _hoveredBlob.Value.Contour == contourData)
-                                        {
-                                            // Draw hovered blob with a different color and border
-                                            using (var hoverBrush = new SolidBrush(Color.FromArgb(180, layer.DisplayColor)))
-                                            {
-                                                g.FillPolygon(hoverBrush, drawingPoints);
-                                            }
-                                            using (var hoverPen = new Pen(Color.White, 1.5f / _zoomFactor))
-                                            {
-                                                g.DrawPolygon(hoverPen, drawingPoints);
-                                            }
-                                        }
-                                        else
-                                        {
-                                            g.FillPolygon(brush, drawingPoints);
-                                        }
-                                    }
-                                }
-                            }
+        private void DrawLayer(Graphics g, LayerInfo layer, RectangleF visibleWorldRect, Point currentOffset)
+        {
+            using (var brush = new SolidBrush(Color.FromArgb(200, layer.DisplayColor)))
+            {
+                foreach (var contourData in layer.Contours)
+                {
+                    // 偏移量 = 板边定位点的质心（currentOffset.X, currentOffset.Y)
+                    var drawingPoints = contourData.Points.Select(p => new Point(p.X + currentOffset.X, p.Y + currentOffset.Y)).ToArray();
+                    if (drawingPoints.Length > 2)
+                    {
+                        // 检查轮廓是否在可见区域内
+                        var checkBox = new Rectangle(
+                            contourData.BoundingBox.X + currentOffset.X,
+                            contourData.BoundingBox.Y + currentOffset.Y,
+                            contourData.BoundingBox.Width,
+                            contourData.BoundingBox.Height
+                        );
+
+                        if (visibleWorldRect.IntersectsWith(checkBox))
+                        {
+                            DrawContour(g, layer, contourData, drawingPoints, brush);
                         }
                     }
                 }
+            }
+        }
+
+        private void DrawContour(Graphics g, LayerInfo layer, ContourData contourData, Point[] drawingPoints, Brush brush)
+        {
+            // Check if this is the selected blob
+            if (_selectedBlob.HasValue && _selectedBlob.Value.Layer == layer && _selectedBlob.Value.Contour == contourData)
+            {
+                // Draw selected blob with a different color and border
+                using (var selectedBrush = new SolidBrush(Color.FromArgb(230, layer.DisplayColor)))
+                {
+                    g.FillPolygon(selectedBrush, drawingPoints);
+                }
+                using (var selectedPen = new Pen(Color.Yellow, 2f / _zoomFactor))
+                {
+                    g.DrawPolygon(selectedPen, drawingPoints);
+                }
+            }
+            // Check if this is the hovered blob
+            else if (_hoveredBlob.HasValue && _hoveredBlob.Value.Layer == layer && _hoveredBlob.Value.Contour == contourData)
+            {
+                // Draw hovered blob with a different color and border
+                using (var hoverBrush = new SolidBrush(Color.FromArgb(220, layer.DisplayColor)))
+                {
+                    g.FillPolygon(hoverBrush, drawingPoints);
+                }
+                using (var hoverPen = new Pen(Color.White, 1.5f / _zoomFactor))
+                {
+                    g.DrawPolygon(hoverPen, drawingPoints);
+                }
+            }
+            else
+            {
+                g.FillPolygon(brush, drawingPoints);
             }
         }
 
@@ -644,25 +682,38 @@ namespace ImageSegmentation.WinFormsUI
                 // Convert mouse coordinates to world coordinates
                 var worldX = (e.Location.X / _zoomFactor) + _viewOffset.X;
                 var worldY = (e.Location.Y / _zoomFactor) + _viewOffset.Y;
+                Point worldPoint = new Point((int)worldX, (int)worldY);
 
+                // 计算当前偏移量
                 Point currentOffset = (_currentViewMode == BoardInfo.BOARDSIDE.ToString()) ? _originOffset : Point.Empty;
-                TreeNode? activeFlagNode = _layerTreeView.Nodes
-                    .OfType<TreeNode>()
-                     .FirstOrDefault(n => n.Text.Equals(_currentViewMode, StringComparison.OrdinalIgnoreCase));
 
-                // Check if click is within any contour
-                foreach (var flagInfo in _flagInfos)
+                // 查找并处理点击的轮廓
+                FindAndProcessClickedContour(worldPoint, currentOffset);
+            }
+        }
+
+        private void FindAndProcessClickedContour(Point worldPoint, Point currentOffset)
+        {
+            TreeNode? activeFlagNode = _layerTreeView.Nodes
+                .OfType<TreeNode>()
+                .FirstOrDefault(n => n.Text.Equals(_currentViewMode, StringComparison.OrdinalIgnoreCase));
+
+            if (activeFlagNode != null)
+            {
+                foreach (TreeNode layerNode in activeFlagNode.Nodes)
                 {
-                    if (flagInfo.Name != _currentViewMode) continue;
-
-                    foreach (var layer in flagInfo.Layers)
+                    if (layerNode.Checked && layerNode.Tag is LayerInfo layer)
                     {
                         foreach (var contourData in layer.Contours)
                         {
-                            var drawingPoints = contourData.Points.Select(p => new Point(p.X + currentOffset.X, p.Y + currentOffset.Y)).ToArray();
-                            if (IsPointInPolygon(new PointF(worldX, worldY), drawingPoints))
+                            var contourDataBndBoxX = contourData.BoundingBox.X + currentOffset.X;
+                            var contourDataBndBoxY = contourData.BoundingBox.Y + currentOffset.Y;
+                            if (worldPoint.X >= contourDataBndBoxX &&
+                                worldPoint.X <= contourDataBndBoxX + contourData.BoundingBox.Width &&
+                                worldPoint.Y >= contourDataBndBoxY &&
+                                worldPoint.Y <= contourDataBndBoxY + contourData.BoundingBox.Height)
                             {
-                                EditBlobLabel(layer, contourData);
+                                EditBlobLabel(layer, contourData, currentOffset);
                                 return;
                             }
                         }
@@ -671,7 +722,7 @@ namespace ImageSegmentation.WinFormsUI
             }
         }
 
-        private void EditBlobLabel(LayerInfo layer, ContourData contour)
+        private void EditBlobLabel(LayerInfo layer, ContourData contour, Point currentOffset)
         {
             using (var form = new Form())
             {
@@ -713,6 +764,29 @@ namespace ImageSegmentation.WinFormsUI
                 form.Controls.AddRange(new Control[] { label, textBox, okButton, cancelButton });
                 form.AcceptButton = okButton;
                 form.CancelButton = cancelButton;
+                var validContours = new List<ContourData>();
+
+                if (contour.Row != 0 && contour.Col != 0)
+                {
+                    // 遍历所有可能的位置
+                    for (int i = 1; i <= _totalCols; i++)
+                    {
+                        for (int j = 1; j <= _totalRows / _blocks; j++)
+                        {
+                            // 计算偏移量
+                            var offsetX = (i - contour.Col) * _unitLayoutSize.Width;
+                            var offsetY = (j - contour.Row) * _unitLayoutSize.Height;
+
+                            // 创建新的点数组，应用偏移
+                            var newPoints = contour.Points.Select(p =>
+                                new Point(p.X + offsetX, p.Y + offsetY)).ToArray();
+
+                            // 创建新的轮廓数据
+                            var newContour = new ContourData(newPoints, i, j);
+                            validContours.Add(newContour);
+                        }
+                    }
+                }
 
                 if (form.ShowDialog() == DialogResult.OK && !string.IsNullOrWhiteSpace(textBox.Text))
                 {
@@ -721,23 +795,66 @@ namespace ImageSegmentation.WinFormsUI
                     {
                         Name = textBox.Text,
                         DisplayColor = layer.DisplayColor,
-                        Contours = new List<ContourData> { contour }
+                        Contours = contour.Row != 0 && contour.Col != 0 ? validContours : new List<ContourData> { contour }
                     };
 
                     // Add new layer to the current flag
                     var currentFlag = _flagInfos.FirstOrDefault(f => f.Name == _currentViewMode);
                     if (currentFlag != null)
                     {
-                        currentFlag.Layers.Add(newLayer);
+                        // 检查是否存在同名层
+                        var existingLayer = currentFlag.Layers.FirstOrDefault(l => l.Name == textBox.Text);
+                        if (existingLayer != null)
+                        {
+                            // 合并轮廓数据
+                            existingLayer.Contours.AddRange(newLayer.Contours);
+                            newLayer = existingLayer;  // 使用合并后的层
+                        }
+                        else
+                        {
+                            currentFlag.Layers.Add(newLayer);
+                        }
 
                         // Add new node to tree view
                         var flagNode = _layerTreeView.Nodes.Cast<TreeNode>().FirstOrDefault(n => n.Text == _currentViewMode);
                         if (flagNode != null)
                         {
-                            var newNode = new TreeNode(textBox.Text) { Tag = newLayer };
-                            flagNode.Nodes.Add(newNode);
-                        }
+                            // 如果节点已存在，更新其Tag
+                            var existingNode = flagNode.Nodes.Cast<TreeNode>().FirstOrDefault(n => n.Text == textBox.Text);
+                            if (existingNode != null)
+                            {
+                                existingNode.Tag = newLayer;
+                            }
+                            else
+                            {
+                                var newNode = new TreeNode(textBox.Text) { Tag = newLayer };
+                                flagNode.Nodes.Add(newNode);
+                            }
 
+                            // 序列化新layer为JSON并保存
+                            var contourLabel = new ContourLabel
+                            {
+                                LabelName = newLayer.Name,
+                                ContourPositions = newLayer.Contours.Select(c => new ContourWithPosition
+                                {
+                                    Contour = c.Points.Select(p => new OpenCvSharp.Point(p.X, p.Y)).ToArray(),
+                                    Row = c.Row,
+                                    Col = c.Col,
+                                    Block = c.Blocks
+                                }).ToList()
+                            };
+
+                            // 根据当前视图模式确定保存路径
+                            var flagDir = Path.Combine(_currentPath, _currentViewMode);
+                            if (!Directory.Exists(flagDir))
+                            {
+                                Directory.CreateDirectory(flagDir);
+                            }
+
+                            var jsonPath = Path.Combine(flagDir, $"{newLayer.Name}.json");
+                            var json = JsonConvert.SerializeObject(contourLabel, Formatting.Indented);
+                            File.WriteAllText(jsonPath, json);
+                        }
                         _pictureBox.Invalidate();
                     }
                 }
@@ -757,13 +874,15 @@ namespace ImageSegmentation.WinFormsUI
             }
             else
             {
+                // 判断是整板还是单颗
+                Point currentOffset = (_currentViewMode == BoardInfo.BOARDSIDE.ToString()) ? _originOffset : Point.Empty;
+
                 // 鼠标悬停的像素坐标
                 float worldX = _viewOffset.X + e.X / _zoomFactor;
                 float worldY = _viewOffset.Y + e.Y / _zoomFactor;
                 Point worldPoint = new Point((int)worldX, (int)worldY);
+                OpenCvSharp.Point cvPoint = new OpenCvSharp.Point(worldPoint.X, worldPoint.Y);
 
-                // 判断是整板还是单颗
-                Point currentOffset = (_currentViewMode == BoardInfo.BOARDSIDE.ToString()) ? _originOffset : Point.Empty;
                 TreeNode? activeFlagNode = _layerTreeView.Nodes
                     .OfType<TreeNode>()
                      .FirstOrDefault(n => n.Text.Equals(_currentViewMode, StringComparison.OrdinalIgnoreCase));
@@ -778,12 +897,18 @@ namespace ImageSegmentation.WinFormsUI
                             for (int i = 0; i < layer.Contours.Count; i++) 
                             {
                                 var contourData = layer.Contours[i];
-                                var drawingPoints = contourData.Points.Select(p => new Point(p.X + currentOffset.X, p.Y + currentOffset.Y)).ToArray();
-                                if (IsPointInPolygon(worldPoint, drawingPoints))
+                                var contourDataBndBoxX = contourData.BoundingBox.X + currentOffset.X;
+                                var contourDataBndBoxY = contourData.BoundingBox.Y + currentOffset.Y;
+                                var r = contourData.Row;
+                                var c = contourData.Col;
+                                if (worldPoint.X >= contourDataBndBoxX &&
+                                    worldPoint.X <= contourDataBndBoxX + contourData.BoundingBox.Width &&
+                                    worldPoint.Y >= contourDataBndBoxY &&
+                                    worldPoint.Y <= contourDataBndBoxY + contourData.BoundingBox.Height)
                                 {
                                     var num = i;
                                     _hoveredBlob = (layer, contourData);
-                                    _toolTip.SetToolTip(_pictureBox, $"{layerNode.Text}{num + 1}");
+                                    _toolTip.SetToolTip(_pictureBox, $"{layerNode.Text}\n{num + 1}\n{(r, c)}");
                                     _pictureBox.Invalidate();
                                     return;
                                 }
@@ -822,6 +947,9 @@ namespace ImageSegmentation.WinFormsUI
         {
             public int Width { get; set; }
             public int Height { get; set; }
+            public int Rows { get; set; }
+            public int Cols { get; set; }
+            public int Blocks { get; set; }
         }
 
         private class BoardMetadata
@@ -854,6 +982,14 @@ namespace ImageSegmentation.WinFormsUI
             public int Blocks { get; set; }
         }
 
+        public class CoordinateOfPixelAndPhysics
+        {
+            public int X { get; set; }
+            public int Y { get; set; }
+            public int Rows { get; set; }
+            public int Cols { get; set; }
+        }
+
         private class CutPositionInfo
         {
             public int[] Unit { get; set; }
@@ -864,22 +1000,7 @@ namespace ImageSegmentation.WinFormsUI
             return Color.FromArgb(150, _random.Next(128, 256), _random.Next(128, 256), _random.Next(128, 256));
         }
 
-        private bool IsPointInPolygon(PointF point, Point[] polygon)
-        {
-            if (polygon == null || polygon.Length < 3)
-                return false;
-
-            bool inside = false;
-            for (int i = 0, j = polygon.Length - 1; i < polygon.Length; j = i++)
-            {
-                if (((polygon[i].Y > point.Y) != (polygon[j].Y > point.Y)) &&
-                    (point.X < (polygon[j].X - polygon[i].X) * (point.Y - polygon[i].Y) / (polygon[j].Y - polygon[i].Y) + polygon[i].X))
-                {
-                    inside = !inside;
-                }
-            }
-            return inside;
-        }
     }
 } 
+ 
  
