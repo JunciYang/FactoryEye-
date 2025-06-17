@@ -114,7 +114,7 @@ namespace ImageSegmentation.WinFormsUI
         {
             InitializeComponent();
             ApplyCustomStyles();
-            
+
             // Initialize tooltip
             _toolTip = new ToolTip();
             _toolTip.AutoPopDelay = 5000;
@@ -136,7 +136,7 @@ namespace ImageSegmentation.WinFormsUI
             // Panel Colors
             leftPanel.BackColor = Color.FromArgb(63, 63, 70);
             rightPanel.BackColor = Color.FromArgb(30, 30, 30);
-            
+
             // Header Label
             leftPanelHeader.Text = "Layers";
             leftPanelHeader.ForeColor = Color.White;
@@ -152,9 +152,11 @@ namespace ImageSegmentation.WinFormsUI
             _layerTreeView.Margin = new Padding(30);
             _layerTreeView.AfterCheck += OnLayerSelectionChanged;
             _layerTreeView.AfterSelect += OnNodeSelected;
-            _layerTreeView.NodeMouseClick += (sender, e) => {
+            _layerTreeView.NodeMouseClick += (sender, e) =>
+            {
                 // This ensures that clicking on the node text also toggles the checkbox
-                if (e.Node != null) {
+                if (e.Node != null)
+                {
                     e.Node.Checked = !e.Node.Checked;
                 }
             };
@@ -215,20 +217,7 @@ namespace ImageSegmentation.WinFormsUI
             rightPanel.AutoScroll = false;
         }
         #endregion
-        
-        private void UpdatePictureBoxSizeAndPosition()
-        {
-            if (_boardSize.IsEmpty) return;
 
-            // Set the virtual size of the PictureBox.
-            // This determines the range of the scrollbars.
-            _pictureBox.Size = new Size(
-                (int)(_boardSize.Width * _zoomFactor),
-                (int)(_boardSize.Height * _zoomFactor)
-            );
-            _pictureBox.Invalidate();
-        }
-        
         private void FitImageToPanel()
         {
             if (_boardSize.IsEmpty || _pictureBox.ClientSize.Width == 0 || _pictureBox.ClientSize.Height == 0) return;
@@ -255,7 +244,7 @@ namespace ImageSegmentation.WinFormsUI
         private void OnNodeSelected(object? sender, TreeViewEventArgs e)
         {
             if (e.Node == null || e.Node.Tag == null) return;
-            
+
             // Enable color button only for actual layers (child nodes)
             _colorButton.Enabled = e.Node.Parent != null;
 
@@ -277,7 +266,7 @@ namespace ImageSegmentation.WinFormsUI
                         // Uncheck all children of the other node by simulating a click
                         if (otherNode.Checked)
                         {
-                           otherNode.Checked = false;
+                            otherNode.Checked = false;
                         }
                     }
 
@@ -370,24 +359,24 @@ namespace ImageSegmentation.WinFormsUI
                         var layerName = Path.GetFileNameWithoutExtension(layerFile);
                         var json = File.ReadAllText(layerFile);
                         var contourLabel = JsonConvert.DeserializeObject<ContourLabel>(json, new PointConverter());
-                        
+
                         if (contourLabel != null)
                         {
                             var layerInfo = new LayerInfo
                             {
                                 Name = layerName,
                                 DisplayColor = GetRandomColor(),
-                                Contours = contourLabel.ContourPositions != null 
-                                    ? contourLabel.ContourPositions.Select(p => 
+                                Contours = contourLabel.ContourPositions != null
+                                    ? contourLabel.ContourPositions.Select(p =>
                                         new ContourData(
-                                            p.Contour.Select(op => 
+                                            p.Contour.Select(op =>
                                                 new System.Drawing.Point(op.X, op.Y)).ToArray(),
                                             p.Row,
                                             p.Col,
                                             p.Block
                                         )).ToList()
-                                    : contourLabel.Contours.Select(p => 
-                                        new ContourData(p.Select(op => 
+                                    : contourLabel.Contours.Select(p =>
+                                        new ContourData(p.Select(op =>
                                             new System.Drawing.Point(op.X, op.Y)).ToArray())).ToList()
                             };
 
@@ -626,7 +615,7 @@ namespace ImageSegmentation.WinFormsUI
                 layoutEngine.Layout(boardPath, unitImgPath);
 
                 MessageBox.Show("Layout processing completed!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                
+
                 // 自动重新加载图层
                 //LoadLayersFromPath(boardPath);
             }
@@ -727,65 +716,87 @@ namespace ImageSegmentation.WinFormsUI
             using (var form = new Form())
             {
                 form.Text = "Edit Blob Label";
-                form.Size = new Size(500, 300);
+                form.Size = new Size(400, 250);
                 form.StartPosition = FormStartPosition.CenterParent;
                 form.FormBorderStyle = FormBorderStyle.FixedDialog;
                 form.MaximizeBox = false;
                 form.MinimizeBox = false;
+                form.Padding = new Padding(20);
 
                 var label = new Label
                 {
                     Text = "New Label Name:",
-                    Location = new Point(10, 20),
-                    AutoSize = true
+                    Location = new Point(20, 20),
+                    AutoSize = true,
+                    Font = new Font("Segoe UI", 10F)
                 };
 
                 var textBox = new TextBox
                 {
                     Text = layer.Name,
-                    Location = new Point(10, 40),
-                    Width = 260
+                    Location = new Point(20, 50),
+                    Width = 340,
+                    Height = 30,
+                    Font = new Font("Segoe UI", 10F)
+                };
+
+                var buttonPanel = new Panel
+                {
+                    Dock = DockStyle.Bottom,
+                    Height = 80,
+                    Padding = new Padding(10)
                 };
 
                 var okButton = new Button
                 {
                     Text = "OK",
                     DialogResult = DialogResult.OK,
-                    Location = new Point(120, 100)
+                    Location = new Point(buttonPanel.Width - 200, 20),
+                    Size = new Size(110, 40),
+                    Font = new Font("Segoe UI", 10F)
                 };
 
                 var cancelButton = new Button
                 {
                     Text = "Cancel",
                     DialogResult = DialogResult.Cancel,
-                    Location = new Point(200, 100)
+                    Location = new Point(buttonPanel.Width - 100, 20),
+                    Size = new Size(110, 40),
+                    Font = new Font("Segoe UI", 10F)
                 };
 
-                form.Controls.AddRange(new Control[] { label, textBox, okButton, cancelButton });
+                buttonPanel.Controls.AddRange(new Control[] { okButton, cancelButton });
+                form.Controls.AddRange(new Control[] { label, textBox, buttonPanel });
                 form.AcceptButton = okButton;
                 form.CancelButton = cancelButton;
                 var validContours = new List<ContourData>();
 
+                var blockHeight = _fullBoardSize.Height / _blocks;
                 if (contour.Row != 0 && contour.Col != 0)
                 {
-                    // 遍历所有可能的位置
-                    for (int i = 1; i <= _totalCols; i++)
+                    for (int b = 0; b < _blocks; b++)
                     {
-                        for (int j = 1; j <= _totalRows / _blocks; j++)
+                        var blockH = blockHeight * b;
+                        // 遍历所有可能的位置
+                        for (int i = 1; i <= _totalCols; i++)
                         {
-                            // 计算偏移量
-                            var offsetX = (i - contour.Col) * _unitLayoutSize.Width;
-                            var offsetY = (j - contour.Row) * _unitLayoutSize.Height;
+                            for (int j = 1; j <= _totalRows / _blocks; j++)
+                            {
+                                // 计算偏移量
+                                var offsetX = (i - contour.Col) * _unitLayoutSize.Width;
+                                var offsetY = (j - contour.Row) * _unitLayoutSize.Height + blockH;
 
-                            // 创建新的点数组，应用偏移
-                            var newPoints = contour.Points.Select(p =>
-                                new Point(p.X + offsetX, p.Y + offsetY)).ToArray();
+                                // 创建新的点数组，应用偏移
+                                var newPoints = contour.Points.Select(p =>
+                                    new Point(p.X + offsetX, p.Y + offsetY)).ToArray();
 
-                            // 创建新的轮廓数据
-                            var newContour = new ContourData(newPoints, i, j);
-                            validContours.Add(newContour);
+                                // 创建新的轮廓数据
+                                var newContour = new ContourData(newPoints, i, j);
+                                validContours.Add(newContour);
+                            }
                         }
                     }
+
                 }
 
                 if (form.ShowDialog() == DialogResult.OK && !string.IsNullOrWhiteSpace(textBox.Text))
@@ -886,7 +897,7 @@ namespace ImageSegmentation.WinFormsUI
                 TreeNode? activeFlagNode = _layerTreeView.Nodes
                     .OfType<TreeNode>()
                      .FirstOrDefault(n => n.Text.Equals(_currentViewMode, StringComparison.OrdinalIgnoreCase));
-                
+
                 if (activeFlagNode != null)
                 {
                     _hoveredBlob = null; // Reset hover state
@@ -894,7 +905,7 @@ namespace ImageSegmentation.WinFormsUI
                     {
                         if (layerNode.Checked && layerNode.Tag is LayerInfo layer)
                         {
-                            for (int i = 0; i < layer.Contours.Count; i++) 
+                            for (int i = 0; i < layer.Contours.Count; i++)
                             {
                                 var contourData = layer.Contours[i];
                                 var contourDataBndBoxX = contourData.BoundingBox.X + currentOffset.X;
@@ -1000,6 +1011,65 @@ namespace ImageSegmentation.WinFormsUI
             return Color.FromArgb(150, _random.Next(128, 256), _random.Next(128, 256), _random.Next(128, 256));
         }
 
+        private void openImageToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            using (var openFileDialog = new OpenFileDialog())
+            {
+                openFileDialog.Filter = "Image Files|*.jpg;*.jpeg;*.png;*.bmp;*.tif;*.tiff";
+                openFileDialog.Title = "Select an Image File";
+
+                if (openFileDialog.ShowDialog() == DialogResult.OK)
+                {
+                    try
+                    {
+                        var image = Image.FromFile(openFileDialog.FileName);
+                        if (image != null)
+                        {
+                            // 显示图像
+                            DisplayImage(image);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Error loading image: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+            }
+        }
+
+        private void DisplayImage(Image image)
+        {
+            if (image != null)
+            {
+                // 调整图像大小以适应面板
+                var panelSize = _pictureBox.Size;
+                var imageSize = image.Size;
+
+                // 计算缩放比例
+                float ratio = Math.Min(
+                    (float)panelSize.Width / imageSize.Width,
+                    (float)panelSize.Height / imageSize.Height
+                );
+
+                // 创建新的缩放后的图像
+                var newWidth = (int)(imageSize.Width * ratio);
+                var newHeight = (int)(imageSize.Height * ratio);
+
+                var resizedImage = new Bitmap(newWidth, newHeight);
+                using (var g = Graphics.FromImage(resizedImage))
+                {
+                    g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                    g.DrawImage(image, 0, 0, newWidth, newHeight);
+                }
+
+                // 显示图像
+                _pictureBox.Image = resizedImage;
+            }
+        }
+        private void binaryToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            
+        }
     }
 } 
  

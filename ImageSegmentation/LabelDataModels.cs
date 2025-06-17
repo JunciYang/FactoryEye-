@@ -159,9 +159,14 @@ namespace ImageSegmentation
             public List<LabelImages> LabelColorMasks { get; set; }
             public List<LabelImages> LabelGrayMasks { get; set; }
             public List<LabelImages> LabelNoInspMasks { get; set; }
+
+
             public List<ContourLabel> SinglelabelContours {  get; set; }
             public List<ContourLabel> OriginalSizeContours {  get; set; }
             public Mat SolderImage { get; set; }
+            public Mat AllLabelMask { get; set; }
+            public Mat AllLabelRegionInSrcImg { get; set; }
+            public Mat AllRegionBlobs { get; set; }
         }
 
         public class LabelBndBox 

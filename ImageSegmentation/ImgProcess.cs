@@ -44,7 +44,19 @@ namespace ImageSegmentation
             return (filteredContours, binaryImage);
         }
 
-        public static int Threshold(Mat image, Mat binaryImage, int minValue, int maxValue, ThresholdTypes thresholdTypes) 
+        public static int Threshold(Mat image, Mat binaryImage, int minValue, int maxValue, ThresholdTypes thresholdTypes)
+        {
+            var bilateral = EnhanceContrastAndEnhancement(image);
+            var threshold = Cv2.Threshold(bilateral, binaryImage, minValue, maxValue, thresholdTypes);
+            
+            // 使用增强后的阈值对灰度图进行二值化
+            //Cv2.Threshold(grayImage, binaryImage, threshold1, maxValue, ThresholdTypes.Binary);
+            //Cv2.ImWrite(Path.Combine(@$"E:\\ImgSegment\\Test", "binaryImage.jpg"), binaryImage);
+
+            return (int)threshold;
+        }
+
+        public static Mat EnhanceContrastAndEnhancement(Mat image)
         {
             var grayImage = new Mat();
             var gray = new Mat();
@@ -65,15 +77,11 @@ namespace ImageSegmentation
 
             // 3. 使用Bilateral滤波保持边缘的同时减少噪声
             var bilateral = new Mat();
-            Cv2.BilateralFilter(localEnhanced, bilateral, 9, 75, 75);
-            var threshold = Cv2.Threshold(bilateral, binaryImage, minValue, maxValue, thresholdTypes);
-            
-            // 使用增强后的阈值对灰度图进行二值化
-            //Cv2.Threshold(grayImage, binaryImage, threshold1, maxValue, ThresholdTypes.Binary);
-            //Cv2.ImWrite(Path.Combine(@$"E:\\ImgSegment\\Test", "binaryImage.jpg"), binaryImage);
-
-            return (int)threshold;
+            Cv2.BilateralFilter(localEnhanced, bilateral, 15, 65, 65);
+            return bilateral;
         }
+
+
 
         public static Mat ColorImage(Mat image)
         {
@@ -166,74 +174,6 @@ namespace ImageSegmentation
 
             return (mean, stdDev);
         }
-
-
-
-
-        /// <summary>
-        /// 使用区域生长法分割图像
-        /// </summary>
-        private Mat RegionGrowing(Mat image, Mat seeds, double threshold)
-        {
-            var mask = new Mat(image.Size(), MatType.CV_8UC1, Scalar.All(0));
-            var queue = new Queue<Point>();
-
-            // 初始化种子点
-            var seedPoints = new List<Point>();
-            for (int y = 0; y < seeds.Rows; y++)
-            {
-                for (int x = 0; x < seeds.Cols; x++)
-                {
-                    if (seeds.At<byte>(y, x) > 0)
-                    {
-                        queue.Enqueue(new Point(x, y));
-                        mask.Set(y, x, 255);
-                        seedPoints.Add(new Point(x, y));
-                    }
-                }
-            }
-
-            // 计算种子区域的平均强度
-            double seedIntensity = seedPoints.Average(p => image.At<byte>((int)p.Y, (int)p.X));
-
-            // 8邻域方向
-            int[] dx = { -1, -1, -1, 0, 0, 1, 1, 1 };
-            int[] dy = { -1, 0, 1, -1, 1, -1, 0, 1 };
-
-            // 区域生长
-            while (queue.Count > 0)
-            {
-                var current = queue.Dequeue();
-                int x = (int)current.X;
-                int y = (int)current.Y;
-
-                // 检查8邻域
-                for (int i = 0; i < 8; i++)
-                {
-                    int nx = x + dx[i];
-                    int ny = y + dy[i];
-
-                    // 检查边界
-                    if (nx < 0 || nx >= image.Cols || ny < 0 || ny >= image.Rows)
-                        continue;
-
-                    // 如果像素未访问过
-                    if (mask.At<byte>(ny, nx) == 0)
-                    {
-                        // 检查像素强度差异
-                        double diff = Math.Abs(image.At<byte>(ny, nx) - seedIntensity);
-                        if (diff <= threshold)
-                        {
-                            mask.Set(ny, nx, 255);
-                            queue.Enqueue(new Point(nx, ny));
-                        }
-                    }
-                }
-            }
-
-            return mask;
-        }
-
 
         public static Mat EnhanceContrast(Mat input)
         {

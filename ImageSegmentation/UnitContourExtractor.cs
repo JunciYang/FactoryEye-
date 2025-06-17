@@ -128,6 +128,7 @@ namespace ImageSegmentation
             var singlelabelContours = new ContourLabel();
             var allLabelMeMask = new Mat(noInspImg.Size(), MatType.CV_8UC1, Scalar.Black);
 
+
             foreach (var group in groupedList)
             {
                 string label = group.LabelName;
@@ -135,24 +136,32 @@ namespace ImageSegmentation
                 foreach (var maskImage in group.Images)
                 {
                     Cv2.BitwiseOr(labelMeShapesMask, maskImage, labelMeShapesMask);
+                    //if()
                     Cv2.BitwiseOr(allLabelMeMask, maskImage, allLabelMeMask);
 
                 }
-
-                Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\{label}mergedsameLabelMasks.bmp", labelMeShapesMask);
+                Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\{label}_mergedsameLabelMasks.bmp", labelMeShapesMask);
+                Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\{label}_allLabelMeMask.bmp", allLabelMeMask);
 
                 var grayROI = new Mat();
+                var allLabelMeGrayROI = new Mat();
 
                 // 如果是不检区 或 卡槽
                 if (label.ToUpper() == LabelTypes.NOINSP.ToString() || label.ToUpper() == LabelTypes.SLOTCUTOUT.ToString())
                 {
-                    grayROI = labelMeShapesMask;                    
+                    grayROI = labelMeShapesMask;
+                    allLabelMeGrayROI = labelMeShapesMask;   
+                    
                 }
                 else
                 {
                     noInspImg.CopyTo(grayROI, labelMeShapesMask);
+                    noInspImg.CopyTo(allLabelMeGrayROI, allLabelMeMask);
                 }
                 Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\{label}_grayROI.bmp", grayROI);
+                Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\{label}_allLabelMeGrayROI.bmp", allLabelMeGrayROI);
+
+                singleJson.AllLabelMask = allLabelMeMask;
 
                 (contours, binaryMask) = ImgProcess.ThresholdMaskAndFindContours(grayROI, threshold, ThresholdTypes.Binary);
                 Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\{label}_binaryMask.bmp", binaryMask);
@@ -195,23 +204,7 @@ namespace ImageSegmentation
             }
             Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\img00000.bmp", img);
 
-
-
             return singleJson;
-        }
-
-        private void AdjustContourPositions(Point[][] contours, Point point)
-        {
-            var xOffset = point.X;
-            var yOffset = point.Y;
-            foreach (var contour in contours)
-            {
-                for (int i = 0; i < contour.Length; i++)
-                {
-                    contour[i].X += xOffset;
-                    contour[i].Y += yOffset;
-                }
-            }
         }
 
         private Mat CreateNoInspRegion(Mat image, SingleJsonFileResult singleJson, List<LabelListImages> groupedList)
@@ -261,13 +254,23 @@ namespace ImageSegmentation
             {
                 Cv2.BitwiseOr(mergedAllMasks, mask.Images, mergedAllMasks);
             }
-            Cv2.BitwiseNot(mergedAllMasks, mergedAllMasks);
+            result.AllRegionBlobs = mergedAllMasks;
             Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\mergedAllMasks.bmp", mergedAllMasks);
+            var bitwiseNotmergedAllMasks = new Mat();
+            Cv2.BitwiseNot(mergedAllMasks, bitwiseNotmergedAllMasks);
+            Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\bitwiseNotmergedAllMasks.bmp", bitwiseNotmergedAllMasks);
 
             var roi = new Mat();
-            image.CopyTo(roi, mergedAllMasks);
+            image.CopyTo(roi, bitwiseNotmergedAllMasks);
             Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\image_Solder.bmp", roi);
             result.SolderImage = roi;
+
+            Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\mergedAllMasks000.bmp", mergedAllMasks);
+            var solderMask = new Mat();
+            roi.CopyTo(solderMask, result.AllLabelMask);
+            Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\solderMask.bmp", solderMask);
+            result.AllLabelRegionInSrcImg = solderMask;
+
         }
 
     }

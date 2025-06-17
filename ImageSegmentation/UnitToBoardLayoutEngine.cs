@@ -21,6 +21,7 @@ using Size = OpenCvSharp.Size;
 using Point = OpenCvSharp.Point;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 using System.IO;
+using System.Windows.Forms;
 
 namespace ImageSegmentation
 {
@@ -36,7 +37,11 @@ namespace ImageSegmentation
             public BoardContour Contours { get; set; }
             public List<LabelBndBox> BndBoxRegion { get; set; }
             public BoardContour OriginalSizeContours { get; set; }
+            public LabelImages LabelMaskImg { get; set; }
+            public LabelImages LabelRegionInSrcImg { get; set; }
+            public LabelImages LabelBlobs { get; set; }
         }
+
         public Mat Layout(string boardJsonDirectory, string unitImgPath)
         {
             string jsonFile = Path.Combine(boardJsonDirectory, "Layout_Data.json");
@@ -59,11 +64,22 @@ namespace ImageSegmentation
                 FlagsSolderImage = new List<LabelImages>(),
             };
 
-            result.Threshold = UnitThreshold(unitImgPath);
+            var unitImage = ReadUnitImage(unitImgPath);
+            result.Threshold = UnitImageThreshold(unitImage);
 
             // Step 1: Process each region and get their individual results.
             var regionResults = ProcessAllRegions(dataPath, result.Threshold, data);
+            foreach (var ss in regionResults)
+            {
+               
+                if (ss.LabelMaskImg.LabelName.ToUpper() == BoardInfo.UNIT.ToString() && ss.LabelRegionInSrcImg.LabelName.ToUpper() == BoardInfo.UNIT.ToString())
+                {
+                    Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\1\\{ss.LabelMaskImg.LabelName}_allLabelMeGrayROI.bmp", ss.LabelMaskImg.Images);
+                    Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\1\\{ss.LabelMaskImg.LabelName}_LabelRegionInSrcImg.bmp", ss.LabelRegionInSrcImg.Images);
+                    BotMaterial(ss.LabelMaskImg.Images, ss.LabelRegionInSrcImg.Images, ss.LabelBlobs.Images);
+                }
 
+            }
             // Step 2: Aggregate results from all regions.
             AggregateRegionResults(regionResults, result, data);
 
@@ -82,6 +98,36 @@ namespace ImageSegmentation
             SaveLayoutArtifacts(result, data);
 
             return new Mat(); 
+        }
+
+        public static void BotMaterial(Mat labelMask, Mat labelRegion, Mat labelBlobs)
+        {
+            // 310-RH18771B44D计算结果偏正确
+            var path = "E:\\ImgSegment\\Test\\1";
+
+            var test = new Test();
+            var binary = new Mat();
+            var bilateral = ImgProcess.EnhanceContrastAndEnhancement(labelRegion);
+
+            Mat invertedColor = test.InvertColorImage(bilateral);
+            Cv2.ImWrite(@$"{path}\\InvertColorImage.bmp", invertedColor);
+
+            var t = Cv2.Threshold(invertedColor, binary, 0, 255, ThresholdTypes.Binary | ThresholdTypes.Otsu);
+            Cv2.ImWrite(@$"{path}\\binary.bmp", binary);
+
+            var img2 = new Mat();
+            Cv2.BitwiseAnd(invertedColor, labelMask, img2);
+            Cv2.ImWrite(@$"{path}\\img2_binary.bmp", img2);
+
+            //var allBlobs = Cv2.ImRead(@$"{path}\\allBlobs.bmp", ImreadModes.Unchanged);
+            var imgs = new Mat();
+            Cv2.Subtract(img2, labelBlobs, imgs);
+            Cv2.ImWrite(@$"{path}\\imgs00000.bmp", imgs);
+
+            var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(3, 3));
+            Cv2.MorphologyEx(imgs, imgs, MorphTypes.Open, kernel);
+            Cv2.ImWrite(@$"{path}\\MorphTypes.bmp", imgs);
+
         }
 
         public void RestoreToFullBoardCoordinates(LabelProcessingResult result, DataInfo.Root data)
@@ -307,7 +353,7 @@ namespace ImageSegmentation
             }
         }
 
-        public int UnitThreshold(string imgPath)
+        public Mat ReadUnitImage(string imgPath)
         {
             var binaryImage = new Mat();
             var unitImage = Cv2.ImRead(imgPath, ImreadModes.Unchanged);
@@ -315,7 +361,17 @@ namespace ImageSegmentation
             {
                 Console.WriteLine("Error: Unit image could not be loaded.");
             }
+            //var threshold = ImgProcess.Threshold(unitImage, binaryImage, 0, 255, ThresholdTypes.Otsu | ThresholdTypes.Binary);
+            //var threshold = ImgProcess.Threshold(unitImage, binaryImage, 0, 255, ThresholdTypes.Otsu | ThresholdTypes.Binary);
+
+            return unitImage;
+        }
+
+        public int UnitImageThreshold(Mat unitImage)
+        {
+            var binaryImage = new Mat();
             var threshold = ImgProcess.Threshold(unitImage, binaryImage, 0, 255, ThresholdTypes.Otsu | ThresholdTypes.Binary);
+
             return threshold;
         }
 
@@ -383,7 +439,21 @@ namespace ImageSegmentation
                     JsonName = flags,
                     ContourGroups = result.SinglelabelContours
                 },
-
+                LabelMaskImg = new LabelImages
+                { 
+                    LabelName = flags,
+                    Images = result.AllLabelMask
+                },
+                LabelRegionInSrcImg = new LabelImages()
+                {
+                    LabelName = flags,
+                    Images = result.AllLabelRegionInSrcImg
+                },
+                LabelBlobs = new LabelImages()
+                {
+                    LabelName = flags,
+                    Images = result.AllRegionBlobs,
+                }
             };
         }
         private Point[][] AdjustContoursToFullBoard(Point[][] contours, Point point)
@@ -752,10 +822,12 @@ namespace ImageSegmentation
             var mergedContours = new Dictionary<string, LabeledContours>();
             if (normalizedTemplateUnitContours == null) return new List<ContourLabel>();
 
+
+
+
             for (int b = 0; b < blocks; b++)
             {
                 var blockH = blocksHeight * b;
-
                 for (int r = 1; r <= blocksRows; r++)
                 {
                     for (int c = 1; c <= totalCols; c++)

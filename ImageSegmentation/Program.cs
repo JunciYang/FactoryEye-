@@ -27,7 +27,7 @@ namespace ImageSegmentation
             //layout.Layout(jsonDirectory, UnitImgPath);
             //Console.WriteLine("Layout data generation complete.");
 
-            //BotMaterial();
+            //BotMaterial2();
 
 
             // Manually enable High DPI support for the application run
@@ -39,9 +39,80 @@ namespace ImageSegmentation
 
         public static void BotMaterial()
         {
-            var path = "E:\\ImgSegment\\Test_BotMaterial\\1";
+            var path = "E:\\ImgSegment\\Test_BotMaterial\\2";
+            var solder = Cv2.ImRead(@$"{path}\\img2.bmp", ImreadModes.Unchanged);
+            //var img0 = Cv2.ImRead(@$"{path}\\1.bmp", ImreadModes.Unchanged);
+            var grayImage = new Mat();
+            var gray = new Mat();
+            if (solder.Channels() >= 3)
+            {
+                Cv2.CvtColor(solder, grayImage, ColorConversionCodes.BGR2GRAY);
+            }
+            else
+            {
+                grayImage = solder;
+            }
+
+            var test = new Test();
+
+
+            Mat invertedColor = test.InvertColorImage(grayImage);
+            Cv2.ImWrite(@$"{path}\\InvertColorImage.bmp", invertedColor);
+
+            //var labelSolder = new Mat();
+            //solder.CopyTo(labelSolder, labelMask);
+            //Cv2.ImWrite(@$"{path}\\labelSolder.bmp", labelSolder);
+
+            #region
+            //var bilateral = ImgProcess.EnhanceContrastAndEnhancement(invertedColor);
+            var claheEnhanced = ImgProcess.EnhanceContrast(invertedColor);
+
+            // 2. 局部对比度增强
+            var localEnhanced = ImgProcess.LocalContrastEnhancement(claheEnhanced); // 阈值太高，若遇到前景背景不好分离的时候可以考虑
+
+            // 3. 使用Bilateral滤波保持边缘的同时减少噪声
+            var bilateral = new Mat();
+            Cv2.BilateralFilter(localEnhanced, bilateral, 15, 65, 65);
+            #endregion
+            Cv2.ImWrite(@$"{path}\\bilateral.bmp", bilateral);
+
+            var binary = new Mat();
+            Mat labelMask = Cv2.ImRead(@$"{path}\\claheEnhanced.bmp", ImreadModes.Unchanged);
+            var t = Cv2.Threshold(labelMask, binary, 0, 255, ThresholdTypes.Binary | ThresholdTypes.Otsu);
+            Cv2.ImWrite(@$"{path}\\binary.bmp", binary);
+            Mat invertedColor1 = test.InvertColorImage(binary);
+            Cv2.ImWrite(@$"{path}\\invertedColor1111.bmp", invertedColor1);
+
+            Mat labelMasks = Cv2.ImRead(@$"{path}\\0.bmp", ImreadModes.Unchanged);
+            var img2 = new Mat();
+            Cv2.BitwiseAnd(invertedColor1, labelMasks, img2);
+            Cv2.ImWrite(@$"{path}\\img2_binary.bmp", img2);
+
+            Mat allBlob = Cv2.ImRead(@$"{path}\\allBlobs.bmp", ImreadModes.Unchanged);
+            var imgs = new Mat();
+            Cv2.Subtract(img2, allBlob,  imgs);
+            Cv2.ImWrite(@$"{path}\\imgs00000.bmp", imgs);
+
+
+            //var labemMask = Cv2.ImRead(@$"{path}\\3.bmp", ImreadModes.Unchanged);
+
+            //Cv2.BitwiseAnd(img2, labemMask, img2);
+            //Cv2.ImWrite(@$"{path}\\img2_labelMask.bmp", img2);
+
+
+            //var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(3, 3));
+            //Cv2.MorphologyEx(img2, img2, MorphTypes.Open, kernel);
+            //Cv2.ImWrite(@$"{path}\\MorphologyEx.bmp", img2);
+
+            //Cv2.ImShow("Inverted Color", invertedColor);
+            //Cv2.WaitKey(0);
+        }
+
+        public static void BotMaterial2()
+        {
+            var path = "E:\\ImgSegment\\Test_BotMaterial\\3";
             var solder = Cv2.ImRead(@$"{path}\\Solder.png", ImreadModes.Unchanged);
-            var img0 = Cv2.ImRead(@$"{path}\\1.bmp", ImreadModes.Unchanged);
+            //var img0 = Cv2.ImRead(@$"{path}\\1.bmp", ImreadModes.Unchanged);
 
 
             var test = new Test();
@@ -55,22 +126,25 @@ namespace ImageSegmentation
             Cv2.CvtColor(labelSolder, binary, ColorConversionCodes.BGR2GRAY);
 
             #region
-            var claheEnhanced = EnhanceContrast(binary);
-            Cv2.ImWrite(@$"{path}\\claheEnhanced.bmp", claheEnhanced);
+            //var claheEnhanced = EnhanceContrast(binary);
+            //Cv2.ImWrite(@$"{path}\\claheEnhanced.bmp", claheEnhanced);
 
-            // 2. 局部对比度增强
-            var localEnhanced = LocalContrastEnhancement(claheEnhanced); // 阈值太高，若遇到前景背景不好分离的时候可以考虑
-            Cv2.ImWrite(@$"{path}\\localEnhanced.bmp", localEnhanced);
+            //2.局部对比度增强
+            //var localEnhanced = LocalContrastEnhancement(claheEnhanced); // 阈值太高，若遇到前景背景不好分离的时候可以考虑
+            //Cv2.ImWrite(@$"{path}\\localEnhanced.bmp", localEnhanced);
 
-            var bilateral = new Mat();
-            Cv2.BilateralFilter(localEnhanced, bilateral, 9, 75, 75);
+            //var bilateral = new Mat();
+            //Cv2.BilateralFilter(localEnhanced, bilateral, 9, 75, 75);
+
+            var bilateral = ImgProcess.EnhanceContrastAndEnhancement(binary);
+
+            #endregion
 
             Mat invertedColor = test.InvertColorImage(bilateral);
             Cv2.ImWrite(@$"{path}\\InvertColorImage.bmp", invertedColor);
 
             var t = Cv2.Threshold(invertedColor, binary, 0, 255, ThresholdTypes.Binary | ThresholdTypes.Otsu);
             Cv2.ImWrite(@$"{path}\\binary.bmp", binary);
-            #endregion
 
             var img2 = new Mat();
             Cv2.BitwiseAnd(binary, labelMask, img2);
@@ -124,6 +198,8 @@ namespace ImageSegmentation
             }
             return result;
         }
+
+
 
     }
 }
