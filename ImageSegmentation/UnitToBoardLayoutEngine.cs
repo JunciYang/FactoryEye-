@@ -69,17 +69,16 @@ namespace ImageSegmentation
 
             // Step 1: Process each region and get their individual results.
             var regionResults = ProcessAllRegions(dataPath, result.Threshold, data);
-            foreach (var ss in regionResults)
-            {
+            //foreach (var ss in regionResults)
+            //{
                
-                if (ss.LabelMaskImg.LabelName.ToUpper() == BoardInfo.UNIT.ToString() && ss.LabelRegionInSrcImg.LabelName.ToUpper() == BoardInfo.UNIT.ToString())
-                {
-                    Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\1\\{ss.LabelMaskImg.LabelName}_allLabelMeGrayROI.bmp", ss.LabelMaskImg.Images);
-                    Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\1\\{ss.LabelMaskImg.LabelName}_LabelRegionInSrcImg.bmp", ss.LabelRegionInSrcImg.Images);
-                    BotMaterial(ss.LabelMaskImg.Images, ss.LabelRegionInSrcImg.Images, ss.LabelBlobs.Images);
-                }
-
-            }
+            //    if (ss.LabelMaskImg.LabelName.ToUpper() == BoardInfo.UNIT.ToString() && ss.LabelRegionInSrcImg.LabelName.ToUpper() == BoardInfo.UNIT.ToString())
+            //    {
+            //        Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\1\\{ss.LabelMaskImg.LabelName}_allLabelMeGrayROI.bmp", ss.LabelMaskImg.Images);
+            //        Cv2.ImWrite(@$"E:\\ImgSegment\\Test\\1\\{ss.LabelMaskImg.LabelName}_LabelRegionInSrcImg.bmp", ss.LabelRegionInSrcImg.Images);
+            //        //BotMaterial(ss.LabelMaskImg.Images, ss.LabelRegionInSrcImg.Images, ss.LabelBlobs.Images);
+            //    }
+            //}
             // Step 2: Aggregate results from all regions.
             AggregateRegionResults(regionResults, result, data);
 

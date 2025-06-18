@@ -36,13 +36,14 @@ namespace ImageSegmentation.WinFormsUI
             _colorButton = new Button();
             _processButton = new Button();
             _startButton = new Button();
+            _thresholdButton = new Button();
             rightPanel = new Panel();
             _pictureBox = new PictureBox();
             menuStrip1 = new MenuStrip();
-            toolStripMenuItem1 = new ToolStripMenuItem();
+            fileToolStripMenuItem = new ToolStripMenuItem();
+            openImageToolStripMenuItem = new ToolStripMenuItem();
             processToolStripMenuItem = new ToolStripMenuItem();
             binaryToolStripMenuItem = new ToolStripMenuItem();
-            openImageToolStripMenuItem = new ToolStripMenuItem();
             mainLayoutPanel.SuspendLayout();
             leftPanel.SuspendLayout();
             rightPanel.SuspendLayout();
@@ -71,16 +72,18 @@ namespace ImageSegmentation.WinFormsUI
             leftPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             leftPanel.Controls.Add(leftPanelHeader, 0, 0);
             leftPanel.Controls.Add(_layerTreeView, 0, 1);
-            leftPanel.Controls.Add(_loadButton, 0, 2);
-            leftPanel.Controls.Add(_colorButton, 0, 3);
-            leftPanel.Controls.Add(_processButton, 0, 4);
-            leftPanel.Controls.Add(_startButton, 0, 5);
+            leftPanel.Controls.Add(_thresholdButton, 0, 2);
+            leftPanel.Controls.Add(_startButton, 0, 3);
+            leftPanel.Controls.Add(_colorButton, 0, 4);
+            leftPanel.Controls.Add(_processButton, 0, 5);
+            leftPanel.Controls.Add(_loadButton, 0, 6);
             leftPanel.Dock = DockStyle.Fill;
             leftPanel.Location = new Point(3, 3);
             leftPanel.Name = "leftPanel";
-            leftPanel.RowCount = 6;
+            leftPanel.RowCount = 7;
             leftPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
             leftPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            leftPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 50F));
             leftPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 50F));
             leftPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 50F));
             leftPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 50F));
@@ -136,6 +139,16 @@ namespace ImageSegmentation.WinFormsUI
             _startButton.Size = new Size(288, 44);
             _startButton.TabIndex = 5;
             // 
+            // _thresholdButton
+            // 
+            _thresholdButton.Dock = DockStyle.Fill;
+            _thresholdButton.Name = "_thresholdButton";
+            _thresholdButton.Text = "Threshold";
+            _thresholdButton.Size = new Size(288, 44);
+            _thresholdButton.TabIndex = 1;
+            _thresholdButton.BackColor = System.Drawing.Color.LightSkyBlue;
+            _thresholdButton.ForeColor = System.Drawing.Color.Black;
+            // 
             // rightPanel
             // 
             rightPanel.Controls.Add(_pictureBox);
@@ -155,19 +168,26 @@ namespace ImageSegmentation.WinFormsUI
             // 
             // menuStrip1
             // 
-            menuStrip1.Items.AddRange(new ToolStripItem[] { toolStripMenuItem1, processToolStripMenuItem });
+            menuStrip1.Items.AddRange(new ToolStripItem[] { fileToolStripMenuItem, processToolStripMenuItem });
             menuStrip1.Location = new Point(0, 0);
             menuStrip1.Name = "menuStrip1";
             menuStrip1.Size = new Size(800, 25);
             menuStrip1.TabIndex = 1;
             menuStrip1.Text = "menuStrip1";
             // 
-            // toolStripMenuItem1
+            // fileToolStripMenuItem
             // 
-            toolStripMenuItem1.DropDownItems.AddRange(new ToolStripItem[] { openImageToolStripMenuItem });
-            toolStripMenuItem1.Name = "toolStripMenuItem1";
-            toolStripMenuItem1.Size = new Size(39, 21);
-            toolStripMenuItem1.Text = "File";
+            fileToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { openImageToolStripMenuItem });
+            fileToolStripMenuItem.Name = "fileToolStripMenuItem";
+            fileToolStripMenuItem.Size = new Size(39, 21);
+            fileToolStripMenuItem.Text = "File";
+            // 
+            // openImageToolStripMenuItem
+            // 
+            openImageToolStripMenuItem.Name = "openImageToolStripMenuItem";
+            openImageToolStripMenuItem.Size = new Size(149, 22);
+            openImageToolStripMenuItem.Text = "Open Image";
+            openImageToolStripMenuItem.Click += openImageToolStripMenuItem_Click;
             // 
             // processToolStripMenuItem
             // 
@@ -179,26 +199,18 @@ namespace ImageSegmentation.WinFormsUI
             // binaryToolStripMenuItem
             // 
             binaryToolStripMenuItem.Name = "binaryToolStripMenuItem";
-            binaryToolStripMenuItem.Size = new Size(180, 22);
+            binaryToolStripMenuItem.Size = new Size(112, 22);
             binaryToolStripMenuItem.Text = "Binary";
             binaryToolStripMenuItem.Click += binaryToolStripMenuItem_Click;
             // 
-            // openImageToolStripMenuItem
-            // 
-            openImageToolStripMenuItem.Name = "openImageToolStripMenuItem";
-            openImageToolStripMenuItem.Size = new Size(180, 22);
-            openImageToolStripMenuItem.Text = "Open Image";
-            openImageToolStripMenuItem.Click += openImageToolStripMenuItem_Click;
-            // 
             // LayerViewerForm
             // 
+            AutoSize = true;
             ClientSize = new Size(800, 450);
             Controls.Add(mainLayoutPanel);
             Controls.Add(menuStrip1);
             MainMenuStrip = menuStrip1;
             Name = "LayerViewerForm";
-            StartPosition = FormStartPosition.CenterParent;
-            WindowState = FormWindowState.Maximized;
             mainLayoutPanel.ResumeLayout(false);
             leftPanel.ResumeLayout(false);
             rightPanel.ResumeLayout(false);
@@ -207,25 +219,25 @@ namespace ImageSegmentation.WinFormsUI
             menuStrip1.PerformLayout();
             ResumeLayout(false);
             PerformLayout();
-
         }
 
         #endregion
 
-        private System.Windows.Forms.TableLayoutPanel mainLayoutPanel;
-        private System.Windows.Forms.TableLayoutPanel leftPanel;
-        private System.Windows.Forms.Label leftPanelHeader;
-        private System.Windows.Forms.Panel rightPanel;
-        private System.Windows.Forms.TreeView _layerTreeView;
-        private System.Windows.Forms.PictureBox _pictureBox;
-        private System.Windows.Forms.Button _loadButton;
-        private System.Windows.Forms.Button _processButton;
-        private System.Windows.Forms.Button _colorButton;
-        private System.Windows.Forms.Button _startButton;
+        private TableLayoutPanel mainLayoutPanel;
+        private TableLayoutPanel leftPanel;
+        private Label leftPanelHeader;
+        private TreeView _layerTreeView;
+        private Button _loadButton;
+        private Button _colorButton;
+        private Button _processButton;
+        private Button _startButton;
+        private Button _thresholdButton;
+        private Panel rightPanel;
+        private PictureBox _pictureBox;
         private MenuStrip menuStrip1;
-        private ToolStripMenuItem toolStripMenuItem1;
+        private ToolStripMenuItem fileToolStripMenuItem;
+        private ToolStripMenuItem openImageToolStripMenuItem;
         private ToolStripMenuItem processToolStripMenuItem;
         private ToolStripMenuItem binaryToolStripMenuItem;
-        private ToolStripMenuItem openImageToolStripMenuItem;
     }
 } 

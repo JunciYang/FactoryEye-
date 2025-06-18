@@ -110,10 +110,23 @@ namespace ImageSegmentation.WinFormsUI
 
         private static readonly Random _random = new Random();
 
+        private PictureBox thresholdPictureBox;
+        private void InitializeThresholdPictureBox()
+        {
+            thresholdPictureBox = new PictureBox();
+            thresholdPictureBox.Dock = DockStyle.Fill;
+            thresholdPictureBox.SizeMode = PictureBoxSizeMode.Zoom;
+            thresholdPictureBox.Visible = false;
+            rightPanel.Controls.Add(thresholdPictureBox);
+            thresholdPictureBox.BringToFront();
+        }
+
         public LayerViewerForm()
         {
             InitializeComponent();
             ApplyCustomStyles();
+            InitializeThresholdPictureBox();
+            _thresholdButton.Click += ThresholdButton_Click;
 
             // Initialize tooltip
             _toolTip = new ToolTip();
@@ -277,6 +290,7 @@ namespace ImageSegmentation.WinFormsUI
 
         private void ColorButton_Click(object sender, EventArgs e)
         {
+            HideThresholdPictureBoxAndShowMain();
             if (_layerTreeView.SelectedNode?.Tag is LayerInfo layerInfo)
             {
                 using (var colorDialog = new ColorDialog())
@@ -292,6 +306,7 @@ namespace ImageSegmentation.WinFormsUI
 
         private void LoadLayers_Click(object sender, EventArgs e)
         {
+            HideThresholdPictureBoxAndShowMain();
             using (var folderDialog = new FolderBrowserDialog())
             {
                 folderDialog.Description = "Select the directory containing layer data";
@@ -570,6 +585,7 @@ namespace ImageSegmentation.WinFormsUI
 
         private void ProcessSelected_Click(object sender, EventArgs e)
         {
+            HideThresholdPictureBoxAndShowMain();
             var selectedLayers = new List<string>();
             foreach (TreeNode flagNode in _layerTreeView.Nodes)
             {
@@ -592,6 +608,7 @@ namespace ImageSegmentation.WinFormsUI
 
         private void StartButton_Click(object sender, EventArgs e)
         {
+            HideThresholdPictureBoxAndShowMain();
             string boardPath;
             using (var dialog = new FolderBrowserDialog())
             {
@@ -1068,7 +1085,124 @@ namespace ImageSegmentation.WinFormsUI
         }
         private void binaryToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            
+            if (thresholdPictureBox.Visible && thresholdPictureBox.Image != null)
+            {
+                using (var dialog = new Form())
+                {
+                    dialog.Text = "阈值调整";
+                    dialog.FormBorderStyle = FormBorderStyle.FixedDialog;
+                    dialog.StartPosition = FormStartPosition.CenterParent;
+                    dialog.Size = new Size(400, 200);
+                    dialog.MaximizeBox = false;
+                    dialog.MinimizeBox = false;
+
+                    var trackBar = new TrackBar
+                    {
+                        Minimum = 0,
+                        Maximum = 255,
+                        Value = 128,
+                        TickFrequency = 10,
+                        Dock = DockStyle.Top,
+                        Width = 350
+                    };
+                    var valueLabel = new Label
+                    {
+                        Text = $"当前阈值: {trackBar.Value}",
+                        Dock = DockStyle.Top,
+                        Height = 30,
+                        TextAlign = ContentAlignment.MiddleCenter
+                    };
+                    trackBar.ValueChanged += (s, ev) =>
+                    {
+                        valueLabel.Text = $"当前阈值: {trackBar.Value}";
+                    };
+
+                    var okButton = new Button
+                    {
+                        Text = "确定",
+                        DialogResult = DialogResult.OK,
+                        Dock = DockStyle.Left,
+                        Width = 100
+                    };
+                    var cancelButton = new Button
+                    {
+                        Text = "取消",
+                        DialogResult = DialogResult.Cancel,
+                        Dock = DockStyle.Right,
+                        Width = 100
+                    };
+                    var buttonPanel = new Panel
+                    {
+                        Dock = DockStyle.Bottom,
+                        Height = 50
+                    };
+                    buttonPanel.Controls.Add(okButton);
+                    buttonPanel.Controls.Add(cancelButton);
+
+                    dialog.Controls.Add(valueLabel);
+                    dialog.Controls.Add(trackBar);
+                    dialog.Controls.Add(buttonPanel);
+
+                    dialog.AcceptButton = okButton;
+                    dialog.CancelButton = cancelButton;
+
+                    if (dialog.ShowDialog() == DialogResult.OK)
+                    {
+                        // 二值化处理
+                        if (thresholdPictureBox.Image is Bitmap srcBmp)
+                        {
+                            Bitmap binBmp = new Bitmap(srcBmp.Width, srcBmp.Height);
+                            for (int x = 0; x < srcBmp.Width; x++)
+                            {
+                                for (int y = 0; y < srcBmp.Height; y++)
+                                {
+                                    Color c = srcBmp.GetPixel(x, y);
+                                    int gray = (int)(c.R * 0.3 + c.G * 0.59 + c.B * 0.11);
+                                    binBmp.SetPixel(x, y, gray > trackBar.Value ? Color.White : Color.Black);
+                                }
+                            }
+                            thresholdPictureBox.Image = binBmp;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                MessageBox.Show("请先通过Threshold按钮加载图片！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+
+        private void ThresholdButton_Click(object sender, EventArgs e)
+        {
+            // 清空LoadLayers加载的内容
+            _layerTreeView.Nodes.Clear();
+            _flagInfos.Clear();
+            _currentPath = null;
+            _fullBoardSize = Size.Empty;
+            _unitLayoutSize = Size.Empty;
+            _boardSize = Size.Empty;
+            _originOffset = Point.Empty;
+            _pictureBox.Image = null;
+            _pictureBox.Invalidate();
+
+            using (var openFileDialog = new OpenFileDialog())
+            {
+                openFileDialog.Filter = "Image Files|*.jpg;*.jpeg;*.png;*.bmp;*.tif;*.tiff";
+                openFileDialog.Title = "Select an Image File for Threshold";
+                if (openFileDialog.ShowDialog() == DialogResult.OK)
+                {
+                    var image = Image.FromFile(openFileDialog.FileName);
+                    thresholdPictureBox.Image = image;
+                    thresholdPictureBox.Visible = true;
+                    _pictureBox.Visible = false;
+                }
+            }
+        }
+
+        private void HideThresholdPictureBoxAndShowMain()
+        {
+            thresholdPictureBox.Visible = false;
+            _pictureBox.Visible = true;
         }
     }
 } 
